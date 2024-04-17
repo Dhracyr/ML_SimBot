@@ -41,6 +41,16 @@ class Frostbolt(Spell):
             self.training_dummy.damage_taken += self.damage
 
 
+class BloodMoonCrescent(Spell):
+    def __init__(self, name, cooldown, damage, training_dummy):
+        super().__init__(name, cooldown, damage)
+        self.training_dummy = training_dummy
+
+    def cast(self):
+        if super().cast():
+            self.training_dummy.damage_taken += self.damage
+
+
 class Blaze(Spell):
     def __init__(self, name, cooldown, damage, training_dummy, character):
         super().__init__(name, cooldown, damage)
@@ -139,9 +149,10 @@ class RunSim:
         self.spells = {
             'Fireball': Fireball('Fireball', 0, 10, self.training_dummy),        # Name, Cooldown, Damage
             'Frostbolt': Frostbolt('Frostbolt', 0, 3, self.training_dummy),      # Name, Cooldown, Damage
+            'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80, self.training_dummy), # Name, Cooldown, Damage
             'Blaze': Blaze('Blaze', 0, 5, self.training_dummy, self.character),  # Name, Cooldown, Damage
             'DoT': ScorchDot('DoT', 0, 20, 5, self.training_dummy),              # Name, Cooldown, Duration, Damage
-            'Buff': Combustion('Buff', 60, 25, 0.5, self.character)         # Name, Cooldown, Duration, Damage_increase
+            'Buff': Combustion('Buff', 60, 25, 0.5, self.character)        # Name, Cooldown, Duration, Damage_increase
         }
 
     """
@@ -192,3 +203,9 @@ if __name__ == "__main__":
         possible_actions = list(env.spells.keys())
         action_name_main = random.choice(possible_actions)
         env.step(action_name_main)
+
+# TODO: Fähigkeit abchecken, ob sie überhaupt möglich ist, bevor sie ausgewählt wird (keinen Skip)
+# TODO: random zu ML ausbauen
+# TODO: Env.reset() einbauen
+# TODO: DoT macht nicht direkt Schaden wenn man ihn castet
+# TODO: Damage Multiplier auf alles, Schadensberechnung mehr ans Ende setzen
