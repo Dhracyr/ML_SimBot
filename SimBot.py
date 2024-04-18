@@ -26,7 +26,7 @@ class Spell:
 class BlazeSpell(Spell):
     def effect(self, character):
         if character.last_spell == "Fireball":
-            character.deal_damage(self.damage * 5) # Higher damage if after Fireball
+            character.deal_damage(self.damage * 5)  # Higher damage if after Fireball
         else:
             character.deal_damage(self.damage)  
 
