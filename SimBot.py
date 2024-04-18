@@ -166,21 +166,21 @@ class RunSimEnv(gym.Env):
         # Observation space: assuming some max values for illustration
         max_cooldown = 60
         max_damage = 2000
-        max_duration = 20
-        num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd+count*2
+        max_count = 130
+        num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd*6 (foreach spell)
         self.observation_space = spaces.Box(
-            # low=np.array([0] * len(self.env.spells) * 2 + [0, 0]),
-            # high=np.array([max_cooldown] * len(self.env.spells) + [max_damage] * len(self.env.spells) + [max_duration, max_duration]),
-            low=np.float32(0),
-            high=np.float32(np.inf),
-            shape=(num_features,),
+            low=np.zeros(num_features, dtype=np.float32),  # All lows are 0
+            high=np.array([max_damage] + ([max_count]+[max_cooldown]) * len(self.env.spells)),
+            # low=np.float32(0),
+            # high=np.float32(np.inf),
+            # shape=(num_features,),
             dtype=np.float32
         )
 
     def step(self, action):
         action_name = list(self.env.spells.keys())[action]
         self.env.step(action_name)
-        state = self.env.get_results()  # TODO: Adjust get_results to return a flat array
+        state = self.env.get_results()
         reward = state[2]  # Total-damage in numpy get_results()
         done = self.tick_count >= 128
         self.tick_count += 1  # Increment tick count for Done
@@ -299,4 +299,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: random zu ML ausbauen
+# TODO: Damage_taken richtig übergeben
