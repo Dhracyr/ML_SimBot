@@ -14,7 +14,7 @@ class Spell:
         self.current_cooldown = 0
         self.damage = damage
 
-    def cast(self):
+    def cast(self, run_sim):
         if self.current_cooldown == 0:
             self.current_cooldown = self.cooldown
             print(f"Casting {self.name}, setting cooldown to {self.cooldown}")
@@ -28,83 +28,74 @@ class Spell:
 
 
 class Fireball(Spell):
-    def __init__(self, name, cooldown, damage, training_dummy):
-        super().__init__(name, cooldown, damage)
-        self.training_dummy = training_dummy
 
-    def cast(self):
-        if super().cast():
-            self.training_dummy.calc_damage(self.damage)
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            training_dummy = run_sim.training_dummy
+            training_dummy.calc_damage(self.damage)
             return True
         return False
 
 
 class Frostbolt(Spell):
-    def __init__(self, name, cooldown, damage, training_dummy):
-        super().__init__(name, cooldown, damage)
-        self.training_dummy = training_dummy
-
-    def cast(self):
-        if super().cast():
-            self.training_dummy.calc_damage(self.damage)
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            training_dummy = run_sim.training_dummy
+            training_dummy.calc_damage(self.damage)
             return True
         return False
 
 
 class BloodMoonCrescent(Spell):
-    def __init__(self, name, cooldown, damage, training_dummy):
-        super().__init__(name, cooldown, damage)
-        self.training_dummy = training_dummy
 
-    def cast(self):
-        if super().cast():
-            self.training_dummy.calc_damage(self.damage)
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            training_dummy = run_sim.training_dummy
+            training_dummy.calc_damage(self.damage)
             return True
         return False
 
 
 class Blaze(Spell):
-    def __init__(self, name, cooldown, damage, training_dummy, character):
-        super().__init__(name, cooldown, damage)
-        self.training_dummy = training_dummy
-        self.character = character
-
-    def cast(self):
-        if super().cast():
-            if self.character.last_spell == "Fireball":
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            character = run_sim.character
+            training_dummy = run_sim.training_dummy
+            if character.last_spell == "Fireball":
                 applied_damage = self.damage * 5
-                self.training_dummy.calc_damage(applied_damage)
+                training_dummy.calc_damage(applied_damage)
                 print(f"Blaze cast after Fireball, damage applied: {applied_damage}")
             else:
-                self.training_dummy.calc_damage(self.damage)
+                training_dummy.calc_damage(self.damage)
                 print(f"Blaze cast without Fireball, damage applied: {self.damage}")
             return True
         return False
 
 
 class ScorchDot(Spell):
-    def __init__(self, name, cooldown, duration, damage, training_dummy):
+    def __init__(self, name, cooldown, duration, damage):
         super().__init__(name, cooldown, damage)
         self.duration = duration
-        self.training_dummy = training_dummy
 
-    def cast(self):
-        if super().cast():
-            self.training_dummy.apply_dot(self.damage, self.duration)
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            training_dummy = run_sim.training_dummy
+            training_dummy.apply_dot(self.damage, self.duration)
             return True
         return False
 
 
 class Combustion(Spell):
-    def __init__(self, name, cooldown, duration, damage_increase, character):
+    def __init__(self, name, cooldown, duration, damage_increase):
         super().__init__(name, cooldown, duration)
         self.duration = duration
-        self.character = character
         self.damage_increase = damage_increase
 
-    def cast(self):
-        if super().cast():
-            self.character.activate_buff(self.name, self.duration, self.damage_increase)
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            # training_dummy = run_sim.training_dummy
+            character = run_sim.character
+            character.activate_buff(self.name, self.duration, self.damage_increase)
             return True
         return False
 
@@ -136,8 +127,8 @@ class TrainingDummy:
 
 class Character:
     def __init__(self):
-        self.buff_damage_increase = None
-        self.buff_name = None
+        self.buff_damage_increase = 0.0
+        self.buff_name = ""
         self.buff_active = False
         self.buff_timer = 0
         self.last_spell = None
@@ -181,7 +172,7 @@ class RunSimEnv(gym.Env):
         action_name = list(self.env.spells.keys())[action]
         self.env.step(action_name)
         state = self.env.get_results()
-        reward = state[2]  # Total-damage in numpy get_results()
+        reward = state[0]  # Total-damage in numpy get_results()
         done = self.tick_count >= 128
         self.tick_count += 1  # Increment tick count for Done
         info = {}
@@ -196,33 +187,26 @@ class RunSimEnv(gym.Env):
 
 
 class RunSim:
+    training_dummy = None
+
     def __init__(self):
         self.character = Character()
         self.training_dummy = TrainingDummy(self.character)    # Because the trainingsdummy must know,
         # List of spells                                            # the buff of the player
         self.spells = {
-            'Fireball': Fireball
-            ('Fireball', 0, 10, self.training_dummy),               # Name, Cooldown, Damage
 
-            'Frostbolt': Frostbolt
-            ('Frostbolt', 0, 3, self.training_dummy),               # Name, Cooldown, Damage
-
-            'BloodMoonCrescent': BloodMoonCrescent
-            ('BloodMoonCrescent', 10, 80, self.training_dummy),     # Name, Cooldown, Damage
-
-            'Blaze': Blaze
-            ('Blaze', 0, 5, self.training_dummy, self.character),   # Name, Cooldown, Damage
-
-            'ScorchDoT': ScorchDot
-            ('ScorchDoT', 0, 20, 5, self.training_dummy),           # Name, Cooldown, Duration, Damage
-
-            'Combustion': Combustion
-            ('Combustion', 60, 25, 0.5, self.character)             # Name, Cooldown, Duration, Damage_increase
+            'Fireball': Fireball('Fireball', 0, 10),                                # Name, Cooldown, Damage
+            'Frostbolt': Frostbolt('Frostbolt', 0, 3),                              # Name, Cooldown, Damage
+            'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80),    # Name, Cooldown, Damage
+            'Blaze': Blaze('Blaze', 0, 5),                                          # Name, Cooldown, Damage
+            'ScorchDoT': ScorchDot('ScorchDoT', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
+            'Combustion': Combustion('Combustion', 60, 25, 0.5)                     # Name, Cooldown, Duration, Damage_increase
         }
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
 
-    # reset-function for Reinforcement Learning
+    # Reset-function for Reinforcement Learning
     def reset(self):
+        print("Reset has been made")
         self.character = Character()
         self.training_dummy = TrainingDummy(self.character)
         for spell in self.spells.values():
@@ -233,7 +217,7 @@ class RunSim:
     def step(self, action_name):
         # Check last_casted_spell & increase cast_count
         spell = self.spells[action_name]
-        if spell.cast():
+        if spell.cast(self):
             self.character.last_spell = spell.name
             self.spell_cast_count[action_name] += 1
 
@@ -265,6 +249,7 @@ class RunSim:
         cooldowns = [spell.current_cooldown for _, spell in self.spells.items()]
         cast_counts = [self.spell_cast_count[name] for name in self.spells.keys()]
         state = [self.training_dummy.damage_taken] + cooldowns + cast_counts
+        print(f"Current state being returned: {state}")
         return np.array(state, dtype=np.float32)
 
     def simulate(self, ticks_amount):
@@ -280,12 +265,12 @@ def main():
 
     # Initialize and train the model
     model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=50000)  # Adjust total timesteps according to needs
+    model.learn(total_timesteps=50000)  # Adjust total time_steps according to needs
 
     # Save the model
     model.save("ppo_runsim")
 
-    # Optionally, you can reload the model
+    # Optionally, you can reload it
     # model = PPO.load("ppo_runsim", env=env)
 
     # Evaluate the policy
