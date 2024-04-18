@@ -1,4 +1,10 @@
 import random
+import gym
+import numpy as np
+from gym import spaces
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.evaluation import evaluate_policy
 
 
 class Spell:
@@ -150,6 +156,45 @@ class Character:
                 self.buff_active = False
 
 
+class RunSimEnv(gym.Env):
+    def __init__(self):
+        super(RunSimEnv, self).__init__()
+        self.tick_count = 0
+        self.env = RunSim()
+        # Action space: one discrete action per spell
+        self.action_space = spaces.Discrete(len(self.env.spells))
+        # Observation space: assuming some max values for illustration
+        max_cooldown = 60
+        max_damage = 2000
+        max_duration = 20
+        num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd+count*2
+        self.observation_space = spaces.Box(
+            # low=np.array([0] * len(self.env.spells) * 2 + [0, 0]),
+            # high=np.array([max_cooldown] * len(self.env.spells) + [max_damage] * len(self.env.spells) + [max_duration, max_duration]),
+            low=np.float32(0),
+            high=np.float32(np.inf),
+            shape=(num_features,),
+            dtype=np.float32
+        )
+
+    def step(self, action):
+        action_name = list(self.env.spells.keys())[action]
+        self.env.step(action_name)
+        state = self.env.get_results()  # TODO: Adjust get_results to return a flat array
+        reward = state[2]  # Total-damage in numpy get_results()
+        done = self.tick_count >= 128
+        self.tick_count += 1  # Increment tick count for Done
+        info = {}
+        return state, reward, done, info
+
+    def reset(self):
+        self.tick_count = 0  # Reset tick count
+        return self.env.reset()
+
+    def render(self, mode='human'):
+        self.env.render()
+
+
 class RunSim:
     def __init__(self):
         self.character = Character()
@@ -217,12 +262,10 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
 
     def get_results(self):
-        state = {
-            'total_damage': self.training_dummy.damage_taken,
-            'spell_cast_counts': self.spell_cast_count,
-            'spell_cooldowns': {name: spell.current_cooldown for name, spell in self.spells.items()}
-        }
-        return state
+        cooldowns = [spell.current_cooldown for _, spell in self.spells.items()]
+        cast_counts = [self.spell_cast_count[name] for name in self.spells.keys()]
+        state = [self.training_dummy.damage_taken] + cooldowns + cast_counts
+        return np.array(state, dtype=np.float32)
 
     def simulate(self, ticks_amount):
         for _ in range(ticks_amount):  # Simulate Ticks/Seconds
@@ -231,9 +274,29 @@ class RunSim:
             self.step(chosen_spell)
 
 
+def main():
+    # Create the environment
+    env = DummyVecEnv([lambda: RunSimEnv()])
+
+    # Initialize and train the model
+    model = PPO("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=50000)  # Adjust total timesteps according to needs
+
+    # Save the model
+    model.save("ppo_runsim")
+
+    # Optionally, you can reload the model
+    # model = PPO.load("ppo_runsim", env=env)
+
+    # Evaluate the policy
+    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
+    print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
+
+    # Close the environment when done
+    env.close()
+
+
 if __name__ == "__main__":
-    env = RunSim()
-    env.simulate(75)
-    env.reset()
+    main()
 
 # TODO: random zu ML ausbauen
