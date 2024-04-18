@@ -284,4 +284,15 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: Damage_taken richtig übergeben
+# TODO: Weiter mit den Ergebnissen arbeiten
+# TODO: Grafische Oberfläche
+
+"""
+6 Stages of Success:
+    1. Stop casting spells, that are on cooldown
+    2. Stop casting Frostbolt, because its useless
+    3. Stop casting DoT, when its already active
+    4. Casting Combustion and BloodMoon on Cooldown, because it does most damage
+    5. Alternating between Fireball and Blaze
+    6. Waiting for BloodMoon cooldown when buff-cd is going to expire soon
+"""
