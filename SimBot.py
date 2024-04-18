@@ -17,9 +17,9 @@ class Spell:
     def cast(self, run_sim):
         if self.current_cooldown == 0:
             self.current_cooldown = self.cooldown
-            print(f"Casting {self.name}, setting cooldown to {self.cooldown}")
+            # print(f"Casting {self.name}, setting cooldown to {self.cooldown}")
             return True
-        print(f"Cannot cast {self.name}, cooldown remaining: {self.current_cooldown}")
+        # print(f"Cannot cast {self.name}, cooldown remaining: {self.current_cooldown}")
         return False
 
     def cooldown_tick(self):
@@ -64,10 +64,10 @@ class Blaze(Spell):
             if character.last_spell == "Fireball":
                 applied_damage = self.damage * 5
                 training_dummy.calc_damage(applied_damage)
-                print(f"Blaze cast after Fireball, damage applied: {applied_damage}")
+                # print(f"Blaze cast after Fireball, damage applied: {applied_damage}")
             else:
                 training_dummy.calc_damage(self.damage)
-                print(f"Blaze cast without Fireball, damage applied: {self.damage}")
+                # print(f"Blaze cast without Fireball, damage applied: {self.damage}")
             return True
         return False
 
@@ -206,7 +206,6 @@ class RunSim:
 
     # Reset-function for Reinforcement Learning
     def reset(self):
-        print("Reset has been made")
         self.character = Character()
         self.training_dummy = TrainingDummy(self.character)
         for spell in self.spells.values():
@@ -233,6 +232,7 @@ class RunSim:
         self.render()
 
     def render(self):
+        """
         print(f"Total Damage: {self.training_dummy.damage_taken} damage")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"Remaining DoT Duration: {self.training_dummy.dot_timer}")
@@ -244,12 +244,12 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
-
+        """
     def get_results(self):
         cooldowns = [spell.current_cooldown for _, spell in self.spells.items()]
         cast_counts = [self.spell_cast_count[name] for name in self.spells.keys()]
         state = [self.training_dummy.damage_taken] + cooldowns + cast_counts
-        print(f"Current state being returned: {state}")
+        # print(f"Current state being returned: {state}")
         return np.array(state, dtype=np.float32)
 
     def simulate(self, ticks_amount):
