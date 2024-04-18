@@ -28,7 +28,9 @@ class Fireball(Spell):
 
     def cast(self):
         if super().cast():
-            self.training_dummy.damage_taken += self.damage
+            self.training_dummy.calc_damage(self.damage)
+            return True
+        return False
 
 
 class Frostbolt(Spell):
@@ -38,7 +40,9 @@ class Frostbolt(Spell):
 
     def cast(self):
         if super().cast():
-            self.training_dummy.damage_taken += self.damage
+            self.training_dummy.calc_damage(self.damage)
+            return True
+        return False
 
 
 class BloodMoonCrescent(Spell):
@@ -48,7 +52,9 @@ class BloodMoonCrescent(Spell):
 
     def cast(self):
         if super().cast():
-            self.training_dummy.damage_taken += self.damage
+            self.training_dummy.calc_damage(self.damage)
+            return True
+        return False
 
 
 class Blaze(Spell):
@@ -61,10 +67,10 @@ class Blaze(Spell):
         if super().cast():
             if self.character.last_spell == "Fireball":
                 applied_damage = self.damage * 5
-                self.training_dummy.damage_taken += applied_damage
+                self.training_dummy.calc_damage(applied_damage)
                 print(f"Blaze cast after Fireball, damage applied: {applied_damage}")
             else:
-                self.training_dummy.damage_taken += self.damage
+                self.training_dummy.calc_damage(self.damage)
                 print(f"Blaze cast without Fireball, damage applied: {self.damage}")
             return True
         return False
@@ -99,10 +105,11 @@ class Combustion(Spell):
 
 class TrainingDummy:
 
-    def __init__(self):
+    def __init__(self, character):
         self.dot_damage = 0
         self.dot_timer = 0
         self.damage_taken = 0
+        self.character = character
 
     def apply_dot(self, dot_damage, duration):
         self.dot_timer = duration
@@ -112,7 +119,13 @@ class TrainingDummy:
         # Check Dot-Timer
         if self.dot_timer > 0:
             self.dot_timer -= 1
-            self.damage_taken += self.dot_damage
+            self.calc_damage(self.dot_damage)
+
+    def calc_damage(self, damage):
+        if self.character.buff_active:
+            self.damage_taken += damage * (1+self.character.buff_damage_increase)
+        else:
+            self.damage_taken += damage
 
 
 class Character:
@@ -140,33 +153,33 @@ class Character:
 class RunSim:
     def __init__(self):
         self.character = Character()
-        self.training_dummy = TrainingDummy()
-        # List of spells
+        self.training_dummy = TrainingDummy(self.character)    # Because the trainingsdummy must know,
+        # List of spells                                            # the buff of the player
         self.spells = {
             'Fireball': Fireball
-            ('Fireball', 0, 10, self.training_dummy),  # Name, Cooldown, Damage
+            ('Fireball', 0, 10, self.training_dummy),               # Name, Cooldown, Damage
 
             'Frostbolt': Frostbolt
-            ('Frostbolt', 0, 3, self.training_dummy),  # Name, Cooldown, Damage
+            ('Frostbolt', 0, 3, self.training_dummy),               # Name, Cooldown, Damage
 
             'BloodMoonCrescent': BloodMoonCrescent
-            ('BloodMoonCrescent', 10, 80, self.training_dummy),  # Name, Cooldown, Damage
+            ('BloodMoonCrescent', 10, 80, self.training_dummy),     # Name, Cooldown, Damage
 
             'Blaze': Blaze
-            ('Blaze', 0, 5, self.training_dummy, self.character),  # Name, Cooldown, Damage
+            ('Blaze', 0, 5, self.training_dummy, self.character),   # Name, Cooldown, Damage
 
             'ScorchDoT': ScorchDot
-            ('ScorchDoT', 0, 20, 5, self.training_dummy),  # Name, Cooldown, Duration, Damage
+            ('ScorchDoT', 0, 20, 5, self.training_dummy),           # Name, Cooldown, Duration, Damage
 
             'Combustion': Combustion
-            ('Combustion', 60, 25, 0.5, self.character)  # Name, Cooldown, Duration, Damage_increase
+            ('Combustion', 60, 25, 0.5, self.character)             # Name, Cooldown, Duration, Damage_increase
         }
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
 
     # reset-function for Reinforcement Learning
     def reset(self):
         self.character = Character()
-        self.training_dummy = TrainingDummy()
+        self.training_dummy = TrainingDummy(self.character)
         for spell in self.spells.values():
             spell.current_cooldown = 0
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
@@ -203,12 +216,6 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
 
-    def simulate(self, ticks_amount):
-        for _ in range(ticks_amount):  # Simulate Ticks/Seconds
-            valid_actions = [name for name, spell in self.spells.items() if spell.current_cooldown == 0]
-            chosen_spell = random.choice(valid_actions)
-            self.step(chosen_spell)
-
     def get_results(self):
         state = {
             'total_damage': self.training_dummy.damage_taken,
@@ -217,6 +224,12 @@ class RunSim:
         }
         return state
 
+    def simulate(self, ticks_amount):
+        for _ in range(ticks_amount):  # Simulate Ticks/Seconds
+            valid_actions = [name for name, spell in self.spells.items() if spell.current_cooldown == 0]
+            chosen_spell = random.choice(valid_actions)
+            self.step(chosen_spell)
+
 
 if __name__ == "__main__":
     env = RunSim()
@@ -224,4 +237,3 @@ if __name__ == "__main__":
     env.reset()
 
 # TODO: random zu ML ausbauen
-# TODO: Damage Multiplier auf alles, Schadensberechnung mehr ans Ende setzen
