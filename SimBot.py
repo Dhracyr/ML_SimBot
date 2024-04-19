@@ -1,3 +1,4 @@
+import os
 import random
 import gym
 import numpy as np
@@ -171,12 +172,12 @@ class RunSimEnv(gym.Env):
     def step(self, action):
         action_name = list(self.env.spells.keys())[action]
         self.env.step(action_name)
-        state = self.env.get_results()
-        reward = state[0]  # Total-damage in numpy get_results()
+        obs = self.env.get_results()
+        reward = obs[0]  # Total-damage in numpy get_results()
         done = self.tick_count >= 128
         self.tick_count += 1  # Increment tick count for Done
         info = {}
-        return state, reward, done, info
+        return obs, reward, done, info
 
     def reset(self):
         self.tick_count = 0  # Reset tick count
@@ -252,11 +253,13 @@ class RunSim:
         # print(f"Current state being returned: {state}")
         return np.array(state, dtype=np.float32)
 
+    """
     def simulate(self, ticks_amount):
         for _ in range(ticks_amount):  # Simulate Ticks/Seconds
             valid_actions = [name for name, spell in self.spells.items() if spell.current_cooldown == 0]
             chosen_spell = random.choice(valid_actions)
             self.step(chosen_spell)
+    """
 
 
 def main():
@@ -264,17 +267,24 @@ def main():
     env = DummyVecEnv([lambda: RunSimEnv()])
 
     # Initialize and train the model
-    model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=50000)  # Adjust total time_steps according to needs
+    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=20)
+    model.learn(total_timesteps=10000)  # Adjust total time_steps according to needs
 
     # Save the model
-    model.save("ppo_runsim")
+    save_dir = "/tmp/gym/"
+    os.makedirs(save_dir, exist_ok=True)
+    model.save(f"{save_dir}/ppo_runsim")
 
     # Optionally, you can reload it
-    # model = PPO.load("ppo_runsim", env=env)
+    # model = PPO.load(f"{save_dir}/ppo_runsim", env=env, verbose=1)
+    # show the save hyperparameters
+    # print(f"loaded: gamma={model.gamma}, n_steps={model.n_steps}")
+    # as the environment is not serializable, we need to set a new instance of the environment
+    # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
+    # model.learn(8000)
 
     # Evaluate the policy
-    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
+    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
     print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
 
     # Close the environment when done
