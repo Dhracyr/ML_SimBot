@@ -1,11 +1,14 @@
 import os
-import random
+import time
+
 import gym
 import numpy as np
 from gym import spaces
+from matplotlib import pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.evaluation import evaluate_policy
+from IPython.display import display, clear_output
 
 
 class Spell:
@@ -148,45 +151,6 @@ class Character:
                 self.buff_active = False
 
 
-class RunSimEnv(gym.Env):
-    def __init__(self):
-        super(RunSimEnv, self).__init__()
-        self.tick_count = 0
-        self.env = RunSim()
-        # Action space: one discrete action per spell
-        self.action_space = spaces.Discrete(len(self.env.spells))
-        # Observation space: assuming some max values for illustration
-        max_cooldown = 60
-        max_damage = 2000
-        max_count = 130
-        num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd*6 (foreach spell)
-        self.observation_space = spaces.Box(
-            low=np.zeros(num_features, dtype=np.float32),  # All lows are 0
-            high=np.array([max_damage] + ([max_count]+[max_cooldown]) * len(self.env.spells)),
-            # low=np.float32(0),
-            # high=np.float32(np.inf),
-            # shape=(num_features,),
-            dtype=np.float32
-        )
-
-    def step(self, action):
-        action_name = list(self.env.spells.keys())[action]
-        self.env.step(action_name)
-        obs = self.env.get_results()
-        reward = obs[0]  # Total-damage in numpy get_results()
-        done = self.tick_count >= 128
-        self.tick_count += 1  # Increment tick count for Done
-        info = {}
-        return obs, reward, done, info
-
-    def reset(self):
-        self.tick_count = 0  # Reset tick count
-        return self.env.reset()
-
-    def render(self, mode='human'):
-        self.env.render()
-
-
 class RunSim:
     training_dummy = None
 
@@ -262,13 +226,59 @@ class RunSim:
     """
 
 
-def main():
-    # Create the environment
-    env = DummyVecEnv([lambda: RunSimEnv()])
+def run_simulation():
+    class RunSimEnv(gym.Env):
+        def __init__(self):
+            super(RunSimEnv, self).__init__()
+            self.tick_count = 0
+            self.env = RunSim()
+            # Action space: one discrete action per spell
+            self.action_space = spaces.Discrete(len(self.env.spells))
+            # Observation space: assuming some max values for illustration
+            max_cooldown = 60
+            max_damage = 3565
+            max_count = 128
+            num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd*6 (foreach spell)
+            self.observation_space = spaces.Box(
+                low=np.zeros(num_features, dtype=np.float32),  # All lows are 0
+                high=np.array([max_damage] + ([max_count]+[max_cooldown]) * len(self.env.spells)),
+                # low=np.float32(0),
+                # high=np.float32(np.inf),
+                # shape=(num_features,),
+                dtype=np.float32
+            )
 
-    # Initialize and train the model
-    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=20)
-    model.learn(total_timesteps=10000)  # Adjust total time_steps according to needs
+        def step(self, action):
+            action_name = list(self.env.spells.keys())[action]
+            self.env.step(action_name)
+            obs = self.env.get_results()
+            reward = obs[0]  # Total-damage in numpy get_results()
+            done = self.tick_count >= 128
+            self.tick_count += 1  # Increment tick count for Done
+            info = {}
+            return obs, reward, done, info
+
+        def reset(self):
+            self.tick_count = 0  # Reset tick count
+            return self.env.reset()
+
+        def render(self, mode='human'):
+            self.env.render()
+
+    # Initialize the custom environment
+    env = DummyVecEnv([lambda: RunSimEnv()])
+    os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
+
+    # Set up plot for live updating
+    fig, ax = plt.subplots()
+    ax.set_xlabel('Ticks')
+    ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
+    ax.set_xlim(0, 128)
+    ax.set_ylim(0, 3565)
+    plt.ion()  # Turn on interactive mode
+
+    # Initialize & train the RL model
+    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=2048, ent_coef=0.01, batch_size=2048, gae_lambda=0.95).learn(total_timesteps=5000000)
 
     # Save the model
     save_dir = "/tmp/gym/"
@@ -283,19 +293,102 @@ def main():
     # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
     # model.learn(8000)
 
+    tick_count = 0
+    tick_data = []
+    reward_data = []
+
+    max_damage = 0
+    min_damage = 3000
+    steps_until_stop = 8000
+    for i in range(steps_until_stop):  # Number of steps or until a stopping criterion
+        action = [env.action_space.sample()]  # Random action or from model.predict(obs)
+        obs, rewards, dones, info = env.step(action)
+
+        # Manage the plot update
+        tick_data.append(tick_count)
+        reward_data.append(rewards[0])
+
+        if i % 1 == 0:
+            plot_color = 'purple'
+            if i >= 8000:
+                plot_color = 'blue'
+            elif i >= 7999:
+                plot_color = 'green'
+            elif i >= 6000:
+                plot_color = 'yellow'
+            elif i >= 4000:
+                plot_color = 'orange'
+            elif i >= 2000:
+                plot_color = 'red'
+            else:
+                plot_color = 'black'
+        ax.plot(tick_data, reward_data, color=plot_color)
+        display(plt.gcf())
+        clear_output(wait=True)
+
+        if dones[0]:
+            tick_count = 0
+            tick_data = []
+            reward_data = []
+        else:
+            tick_count += 1
+            if rewards[0] > max_damage:
+                max_damage = rewards[0]
+                max_stats = [obs[0][7], obs[0][8], obs[0][9], obs[0][10], obs[0][11], obs[0][12]]
+            if rewards[0] < max_damage:
+                min_damage = rewards[0]
+                min_stats = [obs[0][7], obs[0][8], obs[0][9], obs[0][10], obs[0][11], obs[0][12]]
+    plt.ioff()  # Turn off interactive mode
+    plt.show()
+
     # Evaluate the policy
     mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
     print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
 
-    # Close the environment when done
+    # print best one
+    if None not in max_stats:
+        print(max_damage, "of 3565")
+        print(f"Fireball used: {max_stats[0]}")
+        print(f"Frostbolt used: {max_stats[1]}")
+        print(f"BloodMoonCrescent used: {max_stats[2]}")
+        print(f"Blaze used: {max_stats[3]}")
+        print(f"ScorchDot used: {max_stats[4]}")
+        print(f"Combustion used: {max_stats[5]}")
+    else:
+        print("fuck you")
+
+    print("------"*5)
+    print("------"*5)
+    # print worst one
+    if None not in min_stats:
+        print(min_damage, "of 3565")
+        print(f"Fireball used: {min_stats[0]}")
+        print(f"Frostbolt used: {min_stats[1]}")
+        print(f"BloodMoonCrescent used: {min_stats[2]}")
+        print(f"Blaze used: {min_stats[3]}")
+        print(f"ScorchDot used: {min_stats[4]}")
+        print(f"Combustion used: {min_stats[5]}")
+    else:
+        print("fuck you")
+
     env.close()
 
 
-if __name__ == "__main__":
-    main()
+def main():
+    pass
 
-# TODO: Weiter mit den Ergebnissen arbeiten
-# TODO: Grafische Oberfläche
+
+if __name__ == "__main__":
+    run_simulation()
+    # main()
+
+# TODO: Ist input tatsächlich nur random???
+# TODO: Ab wann ist overfitting
+# TODO: Parameter durch Cross-Entropy versuchen
+# TODO: Datenbank auslagern?
+# TODO: Mal bissl aufräumen...
+# TODO: Fuck es ist Halb 4...
+# TODO: Docu nochmal anschaun/Jupyter Notebooks
 
 """
 6 Stages of Success:
