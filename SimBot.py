@@ -210,13 +210,16 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         """
+
     def get_results(self):
-        cooldowns = [spell.current_cooldown for _, spell in self.spells.items()]
-        cast_counts = [self.spell_cast_count[name] for name in self.spells.keys()]
-        state = [self.training_dummy.damage_taken] + cooldowns + cast_counts
+        cooldowns = [spell.current_cooldown / 60 for _, spell in self.spells.items()]
+        cast_counts = [self.spell_cast_count[name] / 128 for name in self.spells.keys()]
+        last_spell = [1] if self.character.last_spell == 'Blaze' else [0]
+        state = [self.training_dummy.damage_taken] + cooldowns + cast_counts + last_spell
         # print(f"Current state being returned: {state}")
         return np.array(state, dtype=np.float32)
 
+    # Old simulate
     """
     def simulate(self, ticks_amount):
         for _ in range(ticks_amount):  # Simulate Ticks/Seconds
@@ -238,10 +241,11 @@ def run_simulation():
             max_cooldown = 60
             max_damage = 3565
             max_count = 128
-            num_features = 1 + 2 * len(self.env.spells)  # total_damage + cd*6 (foreach spell)
+            last_spell = 0
+            num_features = 1 + 2 * len(self.env.spells) + 1  # total_damage + cd*6 (foreach spell) + last_spell
             self.observation_space = spaces.Box(
                 low=np.zeros(num_features, dtype=np.float32),  # All lows are 0
-                high=np.array([max_damage] + ([max_count]+[max_cooldown]) * len(self.env.spells)),
+                high=np.array([max_damage] + ([max_count]+[max_cooldown])*len(self.env.spells) + [last_spell]),
                 # low=np.float32(0),
                 # high=np.float32(np.inf),
                 # shape=(num_features,),
@@ -249,6 +253,8 @@ def run_simulation():
             )
 
         def step(self, action):
+            # action is a np.int64
+
             action_name = list(self.env.spells.keys())[action]
             self.env.step(action_name)
             obs = self.env.get_results()
@@ -265,124 +271,205 @@ def run_simulation():
         def render(self, mode='human'):
             self.env.render()
 
+    def initialize_population(pop_size, action_space, sequence_length):
+        return [np.random.randint(action_space.n, size=sequence_length)
+                for _ in range(pop_size)]
+
+    def evaluate_population(env, population):
+        fitness_scores = []
+        for solution in population:
+            fitness = evaluate_solution(env, solution)
+            fitness_scores.append((solution, fitness))
+        return fitness_scores
+
+    def evaluate_solution(env, solution):
+        obs = env.reset()
+        total_reward = 0
+        for action in solution:
+            obs, reward, done, info = env.step(action)
+            total_reward += reward
+            if done:
+                break
+        return total_reward
+
+    def select_top_solutions(population, fitnesses, top_k=0.1):
+        sorted_indices = np.argsort(fitnesses)[::-1]  # Sort fitnesses in descending order
+        top_cutoff = int(len(population) * top_k)
+        top_indices = sorted_indices[:top_cutoff]
+        return [population[i] for i in top_indices]
+
+    def crossover(parent1, parent2):
+        # Single-point crossover
+        crossover_point = np.random.randint(len(parent1))
+        child = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+        return child
+
+    def mutate(solution, mutation_rate, action_space):
+        for i in range(len(solution)):
+            if np.random.rand() < mutation_rate:
+                solution[i] = np.random.randint(action_space.n)
+        return solution
+
+    def genetic_algorithm(env, pop_size, generations, sequence_length, mutation_rate=0.01):
+        # Initialize population
+        population = initialize_population(pop_size, env.action_space, sequence_length)
+
+        for generation in range(generations):
+            # Evaluate all solutions in the population
+            fitnesses = [evaluate_solution(env, sol) for sol in population]
+
+            # Select the top-performing solutions
+            top_solutions = select_top_solutions(population, fitnesses, top_k=0.1)
+
+            # Create the next generation
+            new_population = []
+            while len(new_population) < pop_size:
+                parent1, parent2 = np.random.choice(top_solutions, 2, replace=False)
+                child = crossover(parent1, parent2)
+                child = mutate(child, mutation_rate, env.action_space)
+                new_population.append(child)
+
+            population = new_population
+
+            # Logging the progress
+            print(f"Generation {generation+1}: Max Fitness {max(fitnesses)}")
+
+        return population
+
     # Initialize the custom environment
     env = DummyVecEnv([lambda: RunSimEnv()])
+    ## env = RunSimEnv()
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
 
     # Set up plot for live updating
     fig, ax = plt.subplots()
-    ax.set_xlabel('Ticks')
-    ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
-    ax.set_xlim(0, 128)
-    ax.set_ylim(0, 3565)
-    plt.ion()  # Turn on interactive mode
 
     # Initialize & train the RL model
-    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=2048, ent_coef=0.01, batch_size=2048, gae_lambda=0.95).learn(total_timesteps=5000000)
-
+    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=2048, ent_coef=0.01, batch_size=2048, gae_lambda=0.95).learn(total_timesteps=5000)
+    
     # Save the model
     save_dir = "/tmp/gym/"
     os.makedirs(save_dir, exist_ok=True)
     model.save(f"{save_dir}/ppo_runsim")
 
+    # Load model
+    """
     # Optionally, you can reload it
-    # model = PPO.load(f"{save_dir}/ppo_runsim", env=env, verbose=1)
+        # model = PPO.load(f"{save_dir}/ppo_runsim", env=env, verbose=1)
     # show the save hyperparameters
-    # print(f"loaded: gamma={model.gamma}, n_steps={model.n_steps}")
+        # print(f"loaded: gamma={model.gamma}, n_steps={model.n_steps}")
     # as the environment is not serializable, we need to set a new instance of the environment
-    # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
-    # model.learn(8000)
+        # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
+        # model.learn(8000)
+    """
+
+    env = RunSimEnv()
+    obs = env.reset()
 
     tick_count = 0
     tick_data = []
     reward_data = []
 
     max_damage = 0
-    min_damage = 3000
     steps_until_stop = 8000
-    for i in range(steps_until_stop):  # Number of steps or until a stopping criterion
-        action = [env.action_space.sample()]  # Random action or from model.predict(obs)
+    max_stats = []
+
+    for i in range(steps_until_stop):
+        action, _ = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
 
         # Manage the plot update
-        tick_data.append(tick_count)
-        reward_data.append(rewards[0])
+        tick_data.append(i)
+        reward_data.append(rewards)
 
-        if i % 1 == 0:
-            plot_color = 'purple'
-            if i >= 8000:
-                plot_color = 'blue'
-            elif i >= 7999:
-                plot_color = 'green'
-            elif i >= 6000:
-                plot_color = 'yellow'
-            elif i >= 4000:
-                plot_color = 'orange'
-            elif i >= 2000:
-                plot_color = 'red'
-            else:
-                plot_color = 'black'
-        ax.plot(tick_data, reward_data, color=plot_color)
-        display(plt.gcf())
-        clear_output(wait=True)
+        if i < 2000:
+            plot_color = 'black'
+        elif i < 4000:
+            plot_color = 'red'
+        elif i < 6000:
+            plot_color = 'orange'
+        elif i < 8000:
+            plot_color = 'yellow'
+        else:
+            plot_color = 'blue'
 
-        if dones[0]:
+        if i % 100 == 0:
+            ax.clear()
+            ax.set_xlabel('Ticks')
+            ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
+            ax.set_xlim(0, 8000)
+            ax.set_ylim(0, 3565000)  # 3565
+            ax.plot(tick_data, reward_data, color=plot_color)
+            display(plt.gcf())
+            clear_output(wait=True)
+
+        if dones:
             tick_count = 0
             tick_data = []
             reward_data = []
         else:
             tick_count += 1
-            if rewards[0] > max_damage:
-                max_damage = rewards[0]
-                max_stats = [obs[0][7], obs[0][8], obs[0][9], obs[0][10], obs[0][11], obs[0][12]]
-            if rewards[0] < max_damage:
-                min_damage = rewards[0]
-                min_stats = [obs[0][7], obs[0][8], obs[0][9], obs[0][10], obs[0][11], obs[0][12]]
-    plt.ioff()  # Turn off interactive mode
+            if rewards > max_damage:
+                max_damage = rewards
+                max_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+            # if rewards < max_damage:
+                # min_damage = rewards
+                # min_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+
     plt.show()
 
     # Evaluate the policy
-    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
-    print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
+    # mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
+    # print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
 
-    # print best one
-    if None not in max_stats:
-        print(max_damage, "of 3565")
-        print(f"Fireball used: {max_stats[0]}")
-        print(f"Frostbolt used: {max_stats[1]}")
-        print(f"BloodMoonCrescent used: {max_stats[2]}")
-        print(f"Blaze used: {max_stats[3]}")
-        print(f"ScorchDot used: {max_stats[4]}")
-        print(f"Combustion used: {max_stats[5]}")
-    else:
-        print("fuck you")
+    def print_best_and_worst():
+        if None not in max_stats:
+            print(f"{max_damage} of 3565, that's {max_damage/3565*100:.2f}%")
+            print(f"Fireball used: {max_stats[0]}")
+            print(f"Frostbolt used: {max_stats[1]}")
+            print(f"BloodMoonCrescent used: {max_stats[2]}")
+            print(f"Blaze used: {max_stats[3]}")
+            print(f"ScorchDot used: {max_stats[4]}")
+            print(f"Combustion used: {max_stats[5]}")
+        else:
+            print("fuck you")
 
-    print("------"*5)
-    print("------"*5)
-    # print worst one
-    if None not in min_stats:
-        print(min_damage, "of 3565")
-        print(f"Fireball used: {min_stats[0]}")
-        print(f"Frostbolt used: {min_stats[1]}")
-        print(f"BloodMoonCrescent used: {min_stats[2]}")
-        print(f"Blaze used: {min_stats[3]}")
-        print(f"ScorchDot used: {min_stats[4]}")
-        print(f"Combustion used: {min_stats[5]}")
-    else:
-        print("fuck you")
+            # print("------"*5)
+            # print("------"*5)
+            # print worst one
+            """
+        if None not in min_stats:
+            print(min_damage, "of 3565")
+            print(f"Fireball used: {min_stats[0]}")
+            print(f"Frostbolt used: {min_stats[1]}")
+            print(f"BloodMoonCrescent used: {min_stats[2]}")
+            print(f"Blaze used: {min_stats[3]}")
+            print(f"ScorchDot used: {min_stats[4]}")
+            print(f"Combustion used: {min_stats[5]}")
+        else:
+            print("fuck you")
+            """
+    print_best_and_worst()
 
     env.close()
 
+    pop_size = 100
+    generations = 50
+    sequence_length = 128
 
-def main():
-    pass
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
+    fitness_scores = evaluate_population(env, best_population)
+    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
+
+    print("Best Performing Solution:")
+    print("Sequence of Actions (Spells):", best_solution)
+    print("Total Fitness (e.g., Total Damage):", best_fitness)
 
 
 if __name__ == "__main__":
     run_simulation()
-    # main()
 
-# TODO: Ist input tatsächlich nur random???
+# TODO: Ist input tatsächlich nur random??? -> Verbessern sich nicht gegenseitig, weshalb... I mean yeah...
 # TODO: Ab wann ist overfitting
 # TODO: Parameter durch Cross-Entropy versuchen
 # TODO: Datenbank auslagern?
