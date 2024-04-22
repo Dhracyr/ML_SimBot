@@ -393,13 +393,21 @@ def run_simulation():
             # Evaluate all solutions in the population
             fitnesses = [evaluate_solution(env, sol) for sol in population]
 
-            # Select the top-performing solutions
-            top_solutions = select_top_solutions(population, fitnesses, top_k=0.1)
+            # Select the top-performing solutions based on their fitness
+            # This could be a function to sort the fitnesses and select the top indices
+            top_indices = np.argsort(fitnesses)[-int(0.1 * len(fitnesses)):]  # Get top 10% indices
 
-            # Create the next generation
+            # Using indices to select from the population
+            top_solutions = [population[i] for i in top_indices]
+
+            # Randomly choose two unique indices from the list of top solution indices
+            selected_indices = np.random.choice(top_indices, 2, replace=False)
+            parent1, parent2 = population[selected_indices[0]], population[selected_indices[1]]
+
+
+        # Create the next generation
             new_population = []
             while len(new_population) < pop_size:
-                parent1, parent2 = np.random.choice(top_solutions, 2, replace=False)
                 child = crossover(parent1, parent2)
                 child = mutate(child, mutation_rate, env.action_space)
                 new_population.append(child)
@@ -448,9 +456,8 @@ def run_simulation():
     obs = env.reset()
     draw_plot(env, model, ax, obs)
 
-
-    pop_size = 110
-    generations = 50
+    pop_size = 100
+    generations = 400
     sequence_length = 128
 
     best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
@@ -459,25 +466,22 @@ def run_simulation():
 
     print("Best Performing Solution:")
     print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness)
+    print("Total Fitness (e.g., Total Damage):", best_fitness/100, "of 3565")
 
 
 
 if __name__ == "__main__":
     run_simulation()
 
-# TODO: Ist input tatsächlich nur random??? -> Verbessern sich nicht gegenseitig, weshalb... I mean yeah...
 # TODO: Ab wann ist overfitting
 # TODO: Parameter durch Cross-Entropy versuchen
 # TODO: Datenbank auslagern?
 # TODO: Mal bissl aufräumen...
-# TODO: Fuck es ist Halb 4...
-# TODO: Docu nochmal anschaun/Jupyter Notebooks
 
 """
 6 Stages of Success:
-    1. Stop casting spells, that are on cooldown
-    2. Stop casting Frostbolt, because its useless
+    1. Stop casting spells, that are on cooldown (edit: Klappt zu 90%)
+    2. Stop casting Frostbolt, because its useless (edit: YES ES KLAPPT)
     3. Stop casting DoT, when its already active
     4. Casting Combustion and BloodMoon on Cooldown, because it does most damage
     5. Alternating between Fireball and Blaze
