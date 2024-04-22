@@ -303,19 +303,6 @@ def draw_plot(env, model, ax, obs):
     print_best_and_worst()
 
     env.close()
-    """
-    pop_size = 110
-    generations = 50
-    sequence_length = 128
-
-    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
-    fitness_scores = evaluate_population(env, best_population)
-    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
-
-    print("Best Performing Solution:")
-    print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness)
-    """
 
 
 def run_simulation():
@@ -460,6 +447,21 @@ def run_simulation():
     env = RunSimEnv()
     obs = env.reset()
     draw_plot(env, model, ax, obs)
+
+
+    pop_size = 110
+    generations = 50
+    sequence_length = 128
+
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
+    fitness_scores = evaluate_population(env, best_population)
+    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
+
+    print("Best Performing Solution:")
+    print("Sequence of Actions (Spells):", best_solution)
+    print("Total Fitness (e.g., Total Damage):", best_fitness)
+
+
 
 if __name__ == "__main__":
     run_simulation()
