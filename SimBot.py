@@ -229,6 +229,95 @@ class RunSim:
     """
 
 
+def draw_plot(env, model, ax, obs):
+    tick_count = 0
+    tick_data = []
+    reward_data = []
+
+    max_damage = 0
+    max_stats = []
+
+    for i in range(128):
+        action, _ = model.predict(obs)
+        obs, rewards, dones, info = env.step(action)
+
+        # Manage the plot update
+        tick_data.append(tick_count)
+        reward_data.append(rewards)
+
+        ax.set_xlabel('Ticks')
+        ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
+        ax.set_xlim(0, 128)
+        ax.set_ylim(0, 3565)  # 3565
+        ax.plot(tick_data, reward_data, color='red', alpha=0.8)
+        display(plt.gcf())
+        # clear_output(wait=True)
+
+        if dones:
+            obs = env.reset()
+            tick_count = 0
+            tick_data = []
+            reward_data = []
+        else:
+            tick_count += 1
+            if rewards > max_damage:
+                max_damage = rewards
+                max_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+            # if rewards < max_damage:
+            # min_damage = rewards
+            # min_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+
+    plt.show()
+
+    # Evaluate the policy
+    # mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
+    # print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
+
+    def print_best_and_worst():
+        if None not in max_stats:
+            print(f"{max_damage} of 3565, that's {max_damage/3565*100:.2f}%")
+            print(f"Fireball used: {max_stats[0]}")
+            print(f"Frostbolt used: {max_stats[1]}")
+            print(f"BloodMoonCrescent used: {max_stats[2]}")
+            print(f"Blaze used: {max_stats[3]}")
+            print(f"ScorchDot used: {max_stats[4]}")
+            print(f"Combustion used: {max_stats[5]}")
+        else:
+            print("fuck you")
+
+            # print("------"*5)
+            # print("------"*5)
+            # print worst one
+            """
+        if None not in min_stats:
+            print(min_damage, "of 3565")
+            print(f"Fireball used: {min_stats[0]}")
+            print(f"Frostbolt used: {min_stats[1]}")
+            print(f"BloodMoonCrescent used: {min_stats[2]}")
+            print(f"Blaze used: {min_stats[3]}")
+            print(f"ScorchDot used: {min_stats[4]}")
+            print(f"Combustion used: {min_stats[5]}")
+        else:
+            print("fuck you")
+            """
+    print_best_and_worst()
+
+    env.close()
+    """
+    pop_size = 110
+    generations = 50
+    sequence_length = 128
+
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
+    fitness_scores = evaluate_population(env, best_population)
+    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
+
+    print("Best Performing Solution:")
+    print("Sequence of Actions (Spells):", best_solution)
+    print("Total Fitness (e.g., Total Damage):", best_fitness)
+    """
+
+
 def run_simulation():
     class RunSimEnv(gym.Env):
         def __init__(self):
@@ -261,8 +350,7 @@ def run_simulation():
             reward = obs[0]  # Total-damage in numpy get_results()
             done = self.tick_count >= 128
             self.tick_count += 1  # Increment tick count for Done
-            info = {}
-            return obs, reward, done, info
+            return obs, reward, done, {}
 
         def reset(self):
             self.tick_count = 0  # Reset tick count
@@ -338,14 +426,20 @@ def run_simulation():
 
     # Initialize the custom environment
     env = DummyVecEnv([lambda: RunSimEnv()])
-    ## env = RunSimEnv()
+    # env = RunSimEnv()
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
 
     # Set up plot for live updating
     fig, ax = plt.subplots()
 
     # Initialize & train the RL model
-    model = PPO("MlpPolicy", env, verbose=1, gamma=0.9, n_steps=2048, ent_coef=0.01, batch_size=2048, gae_lambda=0.95).learn(total_timesteps=5000)
+    model = PPO("MlpPolicy", env, verbose=1,
+                gamma=0.9,
+                n_steps=2048,
+                ent_coef=0.01,
+                batch_size=2048,
+                gae_lambda=0.95)\
+                .learn(total_timesteps=5000)
     
     # Save the model
     save_dir = "/tmp/gym/"
@@ -365,106 +459,7 @@ def run_simulation():
 
     env = RunSimEnv()
     obs = env.reset()
-
-    tick_count = 0
-    tick_data = []
-    reward_data = []
-
-    max_damage = 0
-    steps_until_stop = 8000
-    max_stats = []
-
-    for i in range(steps_until_stop):
-        action, _ = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
-
-        # Manage the plot update
-        tick_data.append(i)
-        reward_data.append(rewards)
-
-        if i < 2000:
-            plot_color = 'black'
-        elif i < 4000:
-            plot_color = 'red'
-        elif i < 6000:
-            plot_color = 'orange'
-        elif i < 8000:
-            plot_color = 'yellow'
-        else:
-            plot_color = 'blue'
-
-        if i % 100 == 0:
-            ax.clear()
-            ax.set_xlabel('Ticks')
-            ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
-            ax.set_xlim(0, 8000)
-            ax.set_ylim(0, 3565000)  # 3565
-            ax.plot(tick_data, reward_data, color=plot_color)
-            display(plt.gcf())
-            clear_output(wait=True)
-
-        if dones:
-            tick_count = 0
-            tick_data = []
-            reward_data = []
-        else:
-            tick_count += 1
-            if rewards > max_damage:
-                max_damage = rewards
-                max_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
-            # if rewards < max_damage:
-                # min_damage = rewards
-                # min_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
-
-    plt.show()
-
-    # Evaluate the policy
-    # mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
-    # print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
-
-    def print_best_and_worst():
-        if None not in max_stats:
-            print(f"{max_damage} of 3565, that's {max_damage/3565*100:.2f}%")
-            print(f"Fireball used: {max_stats[0]}")
-            print(f"Frostbolt used: {max_stats[1]}")
-            print(f"BloodMoonCrescent used: {max_stats[2]}")
-            print(f"Blaze used: {max_stats[3]}")
-            print(f"ScorchDot used: {max_stats[4]}")
-            print(f"Combustion used: {max_stats[5]}")
-        else:
-            print("fuck you")
-
-            # print("------"*5)
-            # print("------"*5)
-            # print worst one
-            """
-        if None not in min_stats:
-            print(min_damage, "of 3565")
-            print(f"Fireball used: {min_stats[0]}")
-            print(f"Frostbolt used: {min_stats[1]}")
-            print(f"BloodMoonCrescent used: {min_stats[2]}")
-            print(f"Blaze used: {min_stats[3]}")
-            print(f"ScorchDot used: {min_stats[4]}")
-            print(f"Combustion used: {min_stats[5]}")
-        else:
-            print("fuck you")
-            """
-    print_best_and_worst()
-
-    env.close()
-
-    pop_size = 100
-    generations = 50
-    sequence_length = 128
-
-    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
-    fitness_scores = evaluate_population(env, best_population)
-    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
-
-    print("Best Performing Solution:")
-    print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness)
-
+    draw_plot(env, model, ax, obs)
 
 if __name__ == "__main__":
     run_simulation()
