@@ -164,7 +164,7 @@ class RunSim:
             'Frostbolt': Frostbolt('Frostbolt', 0, 3),                              # Name, Cooldown, Damage
             'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80),    # Name, Cooldown, Damage
             'Blaze': Blaze('Blaze', 0, 5),                                          # Name, Cooldown, Damage
-            'ScorchDoT': ScorchDot('ScorchDoT', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
+            'ScorchDot': ScorchDot('ScorchDot', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
             'Combustion': Combustion('Combustion', 60, 25, 0.5)                     # Name, Cooldown, Duration, Damage_increase
         }
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
@@ -246,9 +246,9 @@ def draw_plot(env, model, ax, obs):
         reward_data.append(rewards)
 
         ax.set_xlabel('Ticks')
-        ax.set_ylabel('Total Damage')  # Max-Damage possible: 3565 in 128-Ticks
+        ax.set_ylabel('Total Damage')  # Max-Damage possible: 4242.5 in 128-Ticks
         ax.set_xlim(0, 128)
-        ax.set_ylim(0, 3565)  # 3565
+        ax.set_ylim(0, global_max_damage)  # 4242.5
         ax.plot(tick_data, reward_data, color='red', alpha=0.8)
         display(plt.gcf())
         # clear_output(wait=True)
@@ -275,7 +275,7 @@ def draw_plot(env, model, ax, obs):
 
     def print_best_and_worst():
         if None not in max_stats:
-            print(f"{max_damage} of 3565, that's {max_damage/3565*100:.2f}%")
+            print(f"{max_damage} of {global_max_damage}, that's {max_damage/global_max_damage*100:.2f}%")
             print(f"Fireball used: {max_stats[0]}")
             print(f"Frostbolt used: {max_stats[1]}")
             print(f"BloodMoonCrescent used: {max_stats[2]}")
@@ -290,7 +290,7 @@ def draw_plot(env, model, ax, obs):
             # print worst one
             """
         if None not in min_stats:
-            print(min_damage, "of 3565")
+            print(min_damage, "of", global_max_damage)
             print(f"Fireball used: {min_stats[0]}")
             print(f"Frostbolt used: {min_stats[1]}")
             print(f"BloodMoonCrescent used: {min_stats[2]}")
@@ -305,6 +305,9 @@ def draw_plot(env, model, ax, obs):
     env.close()
 
 
+global_max_damage = 4242.5
+
+
 def run_simulation():
     class RunSimEnv(gym.Env):
         def __init__(self):
@@ -315,7 +318,7 @@ def run_simulation():
             self.action_space = spaces.Discrete(len(self.env.spells))
             # Observation space: assuming some max values for illustration
             max_cooldown = 60
-            max_damage = 3565
+            max_damage = global_max_damage
             max_count = 128
             last_spell = 0
             num_features = 1 + 2 * len(self.env.spells) + 1  # total_damage + cd*6 (foreach spell) + last_spell
@@ -403,7 +406,7 @@ def run_simulation():
 
             # Using indices to select from the population
             top_solutions = [population[i] for i in top_indices]
-            print(f"Generation {generation+1}: Max Damage {best_damage} of 3565, that's {best_damage/3565}%")
+            print(f"Generation {generation+1}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage}%")
 
             # Randomly choose two unique indices from the list of top solution indices
             selected_indices = np.random.choice(top_indices, 2, replace=False)
@@ -471,8 +474,7 @@ def run_simulation():
 
     print("Best Performing Solution:")
     print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness, "of 3565")
-
+    print("Total Fitness (e.g., Total Damage):", best_fitness, f"of {global_max_damage}")
 
 
 if __name__ == "__main__":

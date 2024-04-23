@@ -152,22 +152,16 @@ class RunSim:
             'Frostbolt': Frostbolt('Frostbolt', 0, 3),                              # Name, Cooldown, Damage
             'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80),    # Name, Cooldown, Damage
             'Blaze': Blaze('Blaze', 0, 5),                                          # Name, Cooldown, Damage
-            'ScorchDoT': ScorchDot('ScorchDoT', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
+            'ScorchDot': ScorchDot('ScorchDot', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
             'Combustion': Combustion('Combustion', 60, 25, 0.5)                     # Name, Cooldown, Duration, Damage_increase
         }
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
 
-    # Reset-function for Reinforcement Learning
-    def reset(self):
-        self.character = Character()
-        self.training_dummy = TrainingDummy(self.character)
-        for spell in self.spells.values():
-            spell.current_cooldown = 0
-        self.spell_cast_count = {name: 0 for name in self.spells.keys()}
-        return self.get_results()
-
     def step(self, action_name):
         # Check last_casted_spell & increase cast_count
+        print("<class 'str'> ScorchDot")
+        print(type(action_name))
+        print(action_name)
         spell = self.spells[action_name]
         if spell.cast(self):
             self.character.last_spell = spell.name
@@ -199,26 +193,31 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
 
     def simulate(self, ticks_amount):
+        spell_map = {
+            '0': 'Fireball',
+            '1': 'Frostbolt',
+            '2': 'BloodMoonCrescent',
+            '3': 'Blaze',
+            '4': 'ScorchDot',
+            '5': 'Combustion'
+        }
         for i in range(ticks_amount):  # Simulate Ticks/Seconds
-            copied_list = "4 0 3 5 0 2 0 3 0 3 0 3 0 3 0 2 0 3 0 4 0 0 3 0 3 0 3 2 0 3 0 3 0 3 0 0 3 4 2 0 3 0 3 0 0 3 4 0 3 0 3 2 0 3 0 3 0 3 0 3 4 0 3 0 0 3 0 5 4 2 0 0 3 0 3 0 3 0 3 0 2 0 3 0 3 0 4 0 0 3 2 0 0 3 0 3 0 0 3 0 2 0 3 4 0 0 3 0 3 0 2 0 0 3 0 3 0 3 0 3 2 0 3 0 3 0 3 0".split()
-            spell_sequence = [int(num) for num in copied_list]
-
-            spell_map = {
-                0: 'Fireball',
-                1: 'Frostbolt',
-                2: 'BloodMoonCrescent',
-                3: 'Blaze',
-                4: 'ScorchDot',
-                5: 'Combustion'
-            }
-            converted_sequence = [spell_map[spell] for spell in spell_sequence]
-
-            chosen_spell = converted_sequence[i]
-            print(type(chosen_spell))
-            print(chosen_spell)
-            self.step(chosen_spell)
+            # copied_list = "4 0 3 5 0 2 0 3 0 3 0 3 0 3 0 2 0 3 0 4 0 0 3 0 3 0 3 2 0 3 0 3 0 3 0 0 3 4 2 0 3 0 3 0 0 3 4 0 3 0 3 2 0 3 0 3 0 3 0 3 4 0 3 0 0 3 0 5 4 2 0 0 3 0 3 0 3 0 3 0 2 0 3 0 3 0 4 0 0 3 2 0 0 3 0 3 0 0 3 0 2 0 3 4 0 0 3 0 3 0 2 0 0 3 0 3 0 3 0 3 2 0 3 0 3 0 3 0".split()
+            # spell_sequence = [int(num) for num in copied_list]
+            # converted_sequence = [spell_map[spell] for spell in spell_sequence]
+            # chosen_spell = converted_sequence[i]
+            print(f"This is input {i} of {ticks_amount}. Enter a spell")
+            chosen_input = input()
+            if chosen_input in spell_map:
+                chosen_spell = spell_map[chosen_input]
+                self.render()
+                self.step(chosen_spell)
+            else:
+                print("Invalid input, please enter a valid spell number.")
+                continue  # Skip to the next iteration if the input is invalid
 
 
 if __name__ == "__main__":
     env = RunSim()
     env.simulate(128)
+    # Self simualted max damage = 4242.5 in 128 ticks
