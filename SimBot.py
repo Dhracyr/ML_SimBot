@@ -1,14 +1,10 @@
 import os
-import time
 
 import gym
 import numpy as np
 from gym import spaces
 from matplotlib import pyplot as plt
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.evaluation import evaluate_policy
-from IPython.display import display, clear_output
+from IPython.display import display
 
 
 class Spell:
@@ -213,20 +209,10 @@ class RunSim:
 
     def get_results(self):
         cooldowns = [spell.current_cooldown / 60 for _, spell in self.spells.items()]
-        cast_counts = [self.spell_cast_count[name] / 128 for name in self.spells.keys()]
+        cast_counts = [self.spell_cast_count[name] / global_max_ticks for name in self.spells.keys()]
         last_spell = [1] if self.character.last_spell == 'Blaze' else [0]
         state = [self.training_dummy.damage_taken] + cooldowns + cast_counts + last_spell
-        # print(f"Current state being returned: {state}")
         return np.array(state, dtype=np.float32)
-
-    # Old simulate
-    """
-    def simulate(self, ticks_amount):
-        for _ in range(ticks_amount):  # Simulate Ticks/Seconds
-            valid_actions = [name for name, spell in self.spells.items() if spell.current_cooldown == 0]
-            chosen_spell = random.choice(valid_actions)
-            self.step(chosen_spell)
-    """
 
 
 def draw_plot(plot_env, model, ax, obs):
@@ -237,7 +223,7 @@ def draw_plot(plot_env, model, ax, obs):
     max_damage = 0
     max_stats = []
 
-    for i in range(128):
+    for i in range(global_max_ticks):
         action, _ = model.predict(obs)
         obs, rewards, dones, info = plot_env.step(action)
 
@@ -246,8 +232,8 @@ def draw_plot(plot_env, model, ax, obs):
         reward_data.append(rewards)
 
         ax.set_xlabel('Ticks')
-        ax.set_ylabel('Total Damage')  # Max-Damage possible: 4242.5 in 128-Ticks
-        ax.set_xlim(0, 128)
+        ax.set_ylabel('Total Damage')  # Max-Damage possible: 4242.5 in global_max_ticks-Ticks
+        ax.set_xlim(0, global_max_ticks)
         ax.set_ylim(0, global_max_damage)  # 4242.5
         ax.plot(tick_data, reward_data, color='red', alpha=0.8)
         display(plt.gcf())
@@ -262,10 +248,11 @@ def draw_plot(plot_env, model, ax, obs):
             tick_count += 1
             if rewards > max_damage:
                 max_damage = rewards
-                max_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+                max_stats = obs[7]*global_max_ticks, obs[8]*global_max_ticks, obs[9]*global_max_ticks,\
+                    obs[10]*global_max_ticks, obs[11]*global_max_ticks, obs[12]*global_max_ticks
             # if rewards < max_damage:
             # min_damage = rewards
-            # min_stats = obs[7]*128, obs[8]*128, obs[9]*128, obs[10]*128, obs[11]*128, obs[12]*128
+            # min_stats = obs[7]*global_max_ticks, obs[8]*global_max_ticks, obs[9]*global_max_ticks, obs[10]*global_max_ticks, obs[11]*global_max_ticks, obs[12]*global_max_ticks
 
     plt.show()
 
@@ -305,9 +292,6 @@ def draw_plot(plot_env, model, ax, obs):
     plot_env.close()
 
 
-global_max_damage = 4242.5
-
-
 def run_simulation():
     class RunSimEnv(gym.Env):
         def __init__(self):
@@ -319,7 +303,7 @@ def run_simulation():
             # Observation space: assuming some max values for illustration
             max_cooldown = 60
             max_damage = global_max_damage
-            max_count = 128
+            max_count = global_max_ticks
             last_spell = 0
             num_features = 1 + 2 * len(self.env.spells) + 1  # total_damage + cd*6 (foreach spell) + last_spell
             self.observation_space = spaces.Box(
@@ -338,7 +322,7 @@ def run_simulation():
             self.env.step(action_name)
             obs = self.env.get_results()
             reward = obs[0]  # Total-damage in numpy get_results()
-            done = self.tick_count >= 128
+            done = self.tick_count >= global_max_ticks
             self.tick_count += 1  # Increment tick count for Done
             return obs, reward, done, {}
 
@@ -373,12 +357,6 @@ def run_simulation():
                 break
         return [total_reward, best_reward]
 
-    def select_top_solutions(population, sum_fitness, top_k=0.1):
-        sorted_indices = np.argsort(sum_fitness)[::-1]  # Sort sum_fitness in descending order
-        top_cutoff = int(len(population) * top_k)
-        top_indices = sorted_indices[:top_cutoff]
-        return [population[i] for i in top_indices]
-
     def crossover(parent1, parent2):
         # Single-point crossover
         crossover_point = np.random.randint(len(parent1))
@@ -391,9 +369,43 @@ def run_simulation():
                 solution[i] = np.random.randint(action_space.n)
         return solution
 
+    def draw_plot_all_gen(line, ax, fig, list_best_damage, list_generation):
+
+        ax.set_xlabel('Generation')
+        ax.set_ylabel('Total Damage')
+        ax.set_xlim(0, global_generations)  # Use the number of generations for the x-axis limit
+        ax.set_ylim(0, global_max_damage*1.1)  # Example: set maximum possible damage
+
+        line.set_data(list_generation, list_best_damage)
+
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+        # Animated Version
+        """
+        line.set_data(list_generation, list_best_damage)
+        ax.relim()
+        ax.autoscale_view()
+
+        ax.figure.canvas.draw()
+        ax.figure.canvas.flush_events()
+        """
     def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate=0.01):
         # Initialize population
         population = initialize_population(pop_size, ga_env.action_space, sequence_length)
+
+        os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
+        plt.ion()
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        list_best_damages = []
+        list_generations = []
+
+        ax.axhline(y=4000, color='g', linestyle='--', linewidth=1, label='Target Damage = 4000')
+        ax.axhline(y=global_max_damage, color='r', linestyle='-', linewidth=1, label='Max Damage')
+
+        line1, = ax.plot(list_generations, list_best_damages, linestyle='-', color='b')
 
         for generation in range(generations):
             # Evaluate all solutions in the population
@@ -402,11 +414,16 @@ def run_simulation():
 
             # Select the top-performing solutions based on their fitness
             # This could be a function to sort the sum_fitness and select the top indices
-            top_indices = np.argsort(sum_fitness)[-int(0.1 * len(sum_fitness)):]  # Get top 10% indices
+            top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
 
-            # Using indices to select from the population
-            top_solutions = [population[i] for i in top_indices]
-            print(f"Generation {generation+1}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
+            print(f"Generation {generation}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
+            # Set up plot for live updating
+
+            list_best_damages.append(best_damage)
+            list_generations.append(generation)
+
+            draw_plot_all_gen(line1, ax, fig, list_best_damages, list_generations)
+            plt.pause(0.01)
 
             # Randomly choose two unique indices from the list of top solution indices
             selected_indices = np.random.choice(top_indices, 2, replace=False)
@@ -421,10 +438,8 @@ def run_simulation():
 
             population = new_population
 
-            # Logging the progress
-            # print(f"Generation {generation+1}: Max Damage {(sum_fitness[0])}")
-            # print(f"Generation {generation+1}: Max Damage {(top_solutions[0])}")
-
+        plt.ioff()
+        plt.show()
         return population
 
     """
@@ -451,7 +466,7 @@ def run_simulation():
     model.save(f"{save_dir}/ppo_runsim")
 
     # Load model
-    """
+    
     # Optionally, you can reload it
         # model = PPO.load(f"{save_dir}/ppo_runsim", env=env, verbose=1)
     # show the save hyperparameters
@@ -459,32 +474,39 @@ def run_simulation():
     # as the environment is not serializable, we need to set a new instance of the environment
         # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
         # model.learn(8000)
-    """
+    
     """
 
     env = RunSimEnv()
-    obs = env.reset()
-    # draw_plot(env, model, ax, obs)
 
-    pop_size = 20
-    generations = 4000
-    sequence_length = 128
+    pop_size = global_pop_size
+    generations = global_generations
+    sequence_length = global_max_ticks
 
-    best_population = genetic_algorithm(env, pop_size, generations, sequence_length, 0.01)
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length, population_mutation_rate)
     fitness_scores = evaluate_population(env, best_population)
     best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
 
     print("Best Performing Solution:")
     print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness, f"of {global_max_damage}")
+
+
+global_pop_size = 100
+global_max_damage = 4242.5
+global_max_ticks = 128
+global_generations = 10_000
+global_population_top_n_index = 0.1
+population_mutation_rate = 0.05
 
 
 if __name__ == "__main__":
     run_simulation()
-    # Max: 4010.0 / 4242.5
+    # Max: 4052.5 / 4242.5
 
 
-# TODO: Parameteroptimierung, da Overfittung bei 94%
+
+
+# TODO: Parameteroptimierung, da Overfittung bei 95%
 # TODO: Plotten von Generationen in Farben
 
 # TODO: Parameter durch Cross-Entropy versuchen
@@ -496,6 +518,6 @@ if __name__ == "__main__":
     2. Done!        Stop casting Frostbolt, because its useless
     3. 90%!         Stop casting DoT, when its already active
     4. 99%!         Casting Combustion and BloodMoon on Cooldown, because it does most damage
-    5. Often!   Alternating between Fireball and Blaze
+    5. Often!       Alternating between Fireball and Blaze
     6. Not yet!     Waiting for BloodMoon cooldown when buff-cd is going to expire soon
 """
