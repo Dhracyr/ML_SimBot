@@ -353,19 +353,22 @@ def run_simulation():
     def evaluate_population(env, population):
         fitness_scores = []
         for solution in population:
-            fitness = evaluate_solution(env, solution)
+            fitness = evaluate_solution(env, solution)[0]
             fitness_scores.append((solution, fitness))
         return fitness_scores
 
     def evaluate_solution(env, solution):
         obs = env.reset()
         total_reward = 0
+        best_reward = 0
         for action in solution:
             obs, reward, done, info = env.step(action)
             total_reward += reward
+            if reward > best_reward:
+                best_reward = reward
             if done:
                 break
-        return total_reward
+        return [total_reward, best_reward]
 
     def select_top_solutions(population, fitnesses, top_k=0.1):
         sorted_indices = np.argsort(fitnesses)[::-1]  # Sort fitnesses in descending order
@@ -391,7 +394,8 @@ def run_simulation():
 
         for generation in range(generations):
             # Evaluate all solutions in the population
-            fitnesses = [evaluate_solution(env, sol) for sol in population]
+            fitnesses = [evaluate_solution(env, sol)[0] for sol in population]
+            best_damage = max([evaluate_solution(env, sol)[1] for sol in population])
 
             # Select the top-performing solutions based on their fitness
             # This could be a function to sort the fitnesses and select the top indices
@@ -399,13 +403,13 @@ def run_simulation():
 
             # Using indices to select from the population
             top_solutions = [population[i] for i in top_indices]
+            print(f"Generation {generation+1}: Max Damage {best_damage} of 3565, that's {best_damage/3565}%")
 
             # Randomly choose two unique indices from the list of top solution indices
             selected_indices = np.random.choice(top_indices, 2, replace=False)
             parent1, parent2 = population[selected_indices[0]], population[selected_indices[1]]
 
-
-        # Create the next generation
+            # Create the next generation
             new_population = []
             while len(new_population) < pop_size:
                 child = crossover(parent1, parent2)
@@ -415,7 +419,8 @@ def run_simulation():
             population = new_population
 
             # Logging the progress
-            print(f"Generation {generation+1}: Max Fitness {max(fitnesses)}")
+            # print(f"Generation {generation+1}: Max Damage {(fitnesses[0])}")
+            # print(f"Generation {generation+1}: Max Damage {(top_solutions[0])}")
 
         return population
 
@@ -434,7 +439,7 @@ def run_simulation():
                 ent_coef=0.01,
                 batch_size=2048,
                 gae_lambda=0.95)\
-                .learn(total_timesteps=5000)
+                .learn(total_timesteps=10000)
     
     # Save the model
     save_dir = "/tmp/gym/"
@@ -457,7 +462,7 @@ def run_simulation():
     draw_plot(env, model, ax, obs)
 
     pop_size = 100
-    generations = 400
+    generations = 600
     sequence_length = 128
 
     best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
@@ -466,7 +471,7 @@ def run_simulation():
 
     print("Best Performing Solution:")
     print("Sequence of Actions (Spells):", best_solution)
-    print("Total Fitness (e.g., Total Damage):", best_fitness/100, "of 3565")
+    print("Total Fitness (e.g., Total Damage):", best_fitness, "of 3565")
 
 
 
