@@ -220,4 +220,4 @@ class RunSim:
 if __name__ == "__main__":
     env = RunSim()
     env.simulate(128)
-    # Self simualted max damage = 4242.5 in 128 ticks
+    # Self simulated max damage = 4242.5 in 128 ticks, e.g. global_max_damage
