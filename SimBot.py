@@ -466,8 +466,8 @@ def run_simulation():
     obs = env.reset()
     # draw_plot(env, model, ax, obs)
 
-    pop_size = 200
-    generations = 400
+    pop_size = 20
+    generations = 4000
     sequence_length = 128
 
     best_population = genetic_algorithm(env, pop_size, generations, sequence_length, 0.01)
@@ -481,8 +481,10 @@ def run_simulation():
 
 if __name__ == "__main__":
     run_simulation()
+    # Max: 4010.0 / 4242.5
 
-# TODO: Parameteroptimierung, da Overfittung bei 92%
+
+# TODO: Parameteroptimierung, da Overfittung bei 94%
 # TODO: Plotten von Generationen in Farben
 
 # TODO: Parameter durch Cross-Entropy versuchen
