@@ -229,7 +229,7 @@ class RunSim:
     """
 
 
-def draw_plot(env, model, ax, obs):
+def draw_plot(plot_env, model, ax, obs):
     tick_count = 0
     tick_data = []
     reward_data = []
@@ -239,7 +239,7 @@ def draw_plot(env, model, ax, obs):
 
     for i in range(128):
         action, _ = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
+        obs, rewards, dones, info = plot_env.step(action)
 
         # Manage the plot update
         tick_data.append(tick_count)
@@ -254,7 +254,7 @@ def draw_plot(env, model, ax, obs):
         # clear_output(wait=True)
 
         if dones:
-            obs = env.reset()
+            obs = plot_env.reset()
             tick_count = 0
             tick_data = []
             reward_data = []
@@ -302,7 +302,7 @@ def draw_plot(env, model, ax, obs):
             """
     print_best_and_worst()
 
-    env.close()
+    plot_env.close()
 
 
 global_max_damage = 4242.5
@@ -342,7 +342,7 @@ def run_simulation():
             self.tick_count += 1  # Increment tick count for Done
             return obs, reward, done, {}
 
-        def reset(self):
+        def reset(self, **kwargs):
             self.tick_count = 0  # Reset tick count
             return self.env.reset()
 
@@ -353,19 +353,19 @@ def run_simulation():
         return [np.random.randint(action_space.n, size=sequence_length)
                 for _ in range(pop_size)]
 
-    def evaluate_population(env, population):
+    def evaluate_population(ep_env, population):
         fitness_scores = []
         for solution in population:
-            fitness = evaluate_solution(env, solution)[0]
+            fitness = evaluate_solution(ep_env, solution)[0]
             fitness_scores.append((solution, fitness))
         return fitness_scores
 
-    def evaluate_solution(env, solution):
-        obs = env.reset()
+    def evaluate_solution(es_env, solution):
+        obs = es_env.reset()
         total_reward = 0
         best_reward = 0
         for action in solution:
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, info = es_env.step(action)
             total_reward += reward
             if reward > best_reward:
                 best_reward = reward
@@ -373,8 +373,8 @@ def run_simulation():
                 break
         return [total_reward, best_reward]
 
-    def select_top_solutions(population, fitnesses, top_k=0.1):
-        sorted_indices = np.argsort(fitnesses)[::-1]  # Sort fitnesses in descending order
+    def select_top_solutions(population, sum_fitness, top_k=0.1):
+        sorted_indices = np.argsort(sum_fitness)[::-1]  # Sort sum_fitness in descending order
         top_cutoff = int(len(population) * top_k)
         top_indices = sorted_indices[:top_cutoff]
         return [population[i] for i in top_indices]
@@ -391,22 +391,22 @@ def run_simulation():
                 solution[i] = np.random.randint(action_space.n)
         return solution
 
-    def genetic_algorithm(env, pop_size, generations, sequence_length, mutation_rate=0.01):
+    def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate=0.01):
         # Initialize population
-        population = initialize_population(pop_size, env.action_space, sequence_length)
+        population = initialize_population(pop_size, ga_env.action_space, sequence_length)
 
         for generation in range(generations):
             # Evaluate all solutions in the population
-            fitnesses = [evaluate_solution(env, sol)[0] for sol in population]
-            best_damage = max([evaluate_solution(env, sol)[1] for sol in population])
+            sum_fitness = [evaluate_solution(ga_env, sol)[0] for sol in population]
+            best_damage = max([evaluate_solution(ga_env, sol)[1] for sol in population])
 
             # Select the top-performing solutions based on their fitness
-            # This could be a function to sort the fitnesses and select the top indices
-            top_indices = np.argsort(fitnesses)[-int(0.1 * len(fitnesses)):]  # Get top 10% indices
+            # This could be a function to sort the sum_fitness and select the top indices
+            top_indices = np.argsort(sum_fitness)[-int(0.1 * len(sum_fitness)):]  # Get top 10% indices
 
             # Using indices to select from the population
             top_solutions = [population[i] for i in top_indices]
-            print(f"Generation {generation+1}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage}%")
+            print(f"Generation {generation+1}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
 
             # Randomly choose two unique indices from the list of top solution indices
             selected_indices = np.random.choice(top_indices, 2, replace=False)
@@ -416,17 +416,18 @@ def run_simulation():
             new_population = []
             while len(new_population) < pop_size:
                 child = crossover(parent1, parent2)
-                child = mutate(child, mutation_rate, env.action_space)
+                child = mutate(child, mutation_rate, ga_env.action_space)
                 new_population.append(child)
 
             population = new_population
 
             # Logging the progress
-            # print(f"Generation {generation+1}: Max Damage {(fitnesses[0])}")
+            # print(f"Generation {generation+1}: Max Damage {(sum_fitness[0])}")
             # print(f"Generation {generation+1}: Max Damage {(top_solutions[0])}")
 
         return population
 
+    """
     # Initialize the custom environment
     env = DummyVecEnv([lambda: RunSimEnv()])
     # env = RunSimEnv()
@@ -442,7 +443,7 @@ def run_simulation():
                 ent_coef=0.01,
                 batch_size=2048,
                 gae_lambda=0.95)\
-                .learn(total_timesteps=10000)
+        .learn(total_timesteps=1000)
     
     # Save the model
     save_dir = "/tmp/gym/"
@@ -459,16 +460,17 @@ def run_simulation():
         # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
         # model.learn(8000)
     """
+    """
 
     env = RunSimEnv()
     obs = env.reset()
-    draw_plot(env, model, ax, obs)
+    # draw_plot(env, model, ax, obs)
 
-    pop_size = 100
-    generations = 600
+    pop_size = 200
+    generations = 400
     sequence_length = 128
 
-    best_population = genetic_algorithm(env, pop_size, generations, sequence_length)
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length, 0.01)
     fitness_scores = evaluate_population(env, best_population)
     best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
 
@@ -480,18 +482,18 @@ def run_simulation():
 if __name__ == "__main__":
     run_simulation()
 
-# TODO: Ab wann ist overfitting
+# TODO: Parameteroptimierung, da Overfittung bei 92%
+# TODO: Plotten von Generationen in Farben
+
 # TODO: Parameter durch Cross-Entropy versuchen
 # TODO: Datenbank auslagern?
-# TODO: Mal bissl aufräumen...
-# TODO: Hat Push geklappt?
 
 """
 6 Stages of Success:
-    1. Stop casting spells, that are on cooldown (edit: Klappt zu 90%)
-    2. Stop casting Frostbolt, because its useless (edit: YES ES KLAPPT)
-    3. Stop casting DoT, when its already active
-    4. Casting Combustion and BloodMoon on Cooldown, because it does most damage
-    5. Alternating between Fireball and Blaze
-    6. Waiting for BloodMoon cooldown when buff-cd is going to expire soon
+    1. Done!        Stop casting spells, that are on cooldown
+    2. Done!        Stop casting Frostbolt, because its useless
+    3. 90%!         Stop casting DoT, when its already active
+    4. 99%!         Casting Combustion and BloodMoon on Cooldown, because it does most damage
+    5. Often!   Alternating between Fireball and Blaze
+    6. Not yet!     Waiting for BloodMoon cooldown when buff-cd is going to expire soon
 """
