@@ -477,6 +477,7 @@ if __name__ == "__main__":
 # TODO: Parameter durch Cross-Entropy versuchen
 # TODO: Datenbank auslagern?
 # TODO: Mal bissl aufräumen...
+# TODO: Hat Push geklappt?
 
 """
 6 Stages of Success:
