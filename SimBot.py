@@ -364,6 +364,21 @@ def run_simulation():
         child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
         return child1, child2
 
+    def tournament_selection(ts_env, population, k=3):
+        idxes = [np.random.randint(len(population)) for _ in range(k)]
+        selected = [population[idx] for idx in idxes]
+        selected_fitness = [evaluate_solution(ts_env, sol) for sol in selected]
+
+        # Find the index of the solution with the highest total_reward manually
+        max_fitness = -float('inf')  # Assumes fitness can't be lower than this
+        best_index = 0
+        for i, fitness in enumerate(selected_fitness):
+            if fitness[0] > max_fitness:  # Assuming the first element is total_reward
+                max_fitness = fitness[0]
+                best_index = i
+
+        return selected[best_index]
+
     def mutate(solution, mutation_rate, action_space):
         for i in range(len(solution)):
             if np.random.rand() < mutation_rate:
@@ -403,7 +418,7 @@ def run_simulation():
         list_best_damages = []
         list_generations = []
 
-        ax.axhline(y=4000, color='g', linestyle='--', linewidth=1, label='Target Damage = 4000')
+        ax.axhline(y=global_current_record, color='g', linestyle='--', linewidth=1, label='Current record')
         ax.axhline(y=global_max_damage, color='r', linestyle='-', linewidth=1, label='Max Damage')
 
         line1, = ax.plot(list_generations, list_best_damages, linestyle='-', color='b')
@@ -416,7 +431,6 @@ def run_simulation():
             # Select the top-performing solutions based on their fitness
             # This could be a function to sort the sum_fitness and select the top indices
             top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
-
             print(f"Generation {generation}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
             # Set up plot for live updating
 
@@ -429,17 +443,23 @@ def run_simulation():
             # Create the next generation
             new_population = []
             while len(new_population) < pop_size:
-                # Randomly choose two unique indices from the list of top solution indices
-                index1, index2 = np.random.choice(range(len(top_indices)), 2, replace=False)
-                parent1, parent2 = population[index1], population[index2]
+                # Random of top 10%
+                # index1, index2 = np.random.choice(len(top_indices), 2, replace=False)
+                # parent1, parent2 = population[index1], population[index2]
+
+                # Tournament Selection
+                parent1 = tournament_selection(ga_env, population, global_tournament_k_amount)
+                parent2 = tournament_selection(ga_env, population, global_tournament_k_amount)
 
                 child1, child2 = crossover(parent1, parent2)
-                child = mutate(child1, mutation_rate, ga_env.action_space)
-                child = mutate(child2, mutation_rate, ga_env.action_space)
+                child1 = mutate(child1, mutation_rate, ga_env.action_space)
+                child2 = mutate(child2, mutation_rate, ga_env.action_space)
 
                 new_population.extend([child1, child2])
 
+            print(f"Old populationsize: {len(population)}. New: {len(new_population)}")
             population = new_population
+
 
         plt.ioff()
         plt.show()
@@ -497,11 +517,14 @@ def run_simulation():
 global_pop_size = 30
 global_max_damage = 4242.5
 global_max_ticks = 128
-global_generations = 300
+global_generations = 2_000
 global_population_top_n_index = 0.1
 population_mutation_rate = 0.01
+global_tournament_k_amount = 3  # 10% of pop_size probably
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
+# TODO: Diversity Checks
+global_current_record = 4052.5
 
 
 if __name__ == "__main__":
