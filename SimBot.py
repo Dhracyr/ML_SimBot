@@ -440,7 +440,7 @@ def run_simulation():
             best_damage = max([evaluate_solution(ga_env, sol)[1] for sol in population])
 
             # Alter mutation_rate
-            if best_damage == saved_damage_peak:
+            if best_damage == saved_damage_peak: # TODO: Nur, wenns 10x dasselbe angezeigt hat, dann stellt auf nen tieferen Wert, der sich dann wieder hochstucken kann, hoffentlich höher...
                 saved_damage_peak = best_damage
                 generations_since_improvement = 0
             else:
