@@ -359,9 +359,10 @@ def run_simulation():
 
     def crossover(parent1, parent2):
         # Single-point crossover
-        crossover_point = np.random.randint(len(parent1))
-        child = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
-        return child
+        crossover_point = np.random.randint(1, len(parent1))
+        child1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+        child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
+        return child1, child2
 
     def mutate(solution, mutation_rate, action_space):
         for i in range(len(solution)):
@@ -425,16 +426,18 @@ def run_simulation():
             draw_plot_all_gen(line1, ax, fig, list_best_damages, list_generations)
             plt.pause(0.01)
 
-            # Randomly choose two unique indices from the list of top solution indices
-            selected_indices = np.random.choice(top_indices, 2, replace=False)
-            parent1, parent2 = population[selected_indices[0]], population[selected_indices[1]]
-
             # Create the next generation
             new_population = []
             while len(new_population) < pop_size:
-                child = crossover(parent1, parent2)
-                child = mutate(child, mutation_rate, ga_env.action_space)
-                new_population.append(child)
+                # Randomly choose two unique indices from the list of top solution indices
+                index1, index2 = np.random.choice(range(len(top_indices)), 2, replace=False)
+                parent1, parent2 = population[index1], population[index2]
+
+                child1, child2 = crossover(parent1, parent2)
+                child = mutate(child1, mutation_rate, ga_env.action_space)
+                child = mutate(child2, mutation_rate, ga_env.action_space)
+
+                new_population.extend([child1, child2])
 
             population = new_population
 
@@ -491,12 +494,14 @@ def run_simulation():
     print("Sequence of Actions (Spells):", best_solution)
 
 
-global_pop_size = 100
+global_pop_size = 30
 global_max_damage = 4242.5
 global_max_ticks = 128
-global_generations = 10_000
+global_generations = 300
 global_population_top_n_index = 0.1
-population_mutation_rate = 0.05
+population_mutation_rate = 0.01
+# TODO: Cross-over-rate?
+# TODO: Reward Function that punishes similarity
 
 
 if __name__ == "__main__":
