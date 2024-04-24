@@ -1,5 +1,4 @@
 import os
-
 import gym
 import numpy as np
 from gym import spaces
@@ -385,13 +384,13 @@ def run_simulation():
                 solution[i] = np.random.randint(action_space.n)
         return solution
 
-    def adapt_mutation_rate(current_rate, generations_since_improvement, max_rate=0.05, min_rate=0.01):
-        if generations_since_improvement > 10:  # No improvement for 10 generations
-            new_rate = min(current_rate * 1.1, max_rate)
-            print("No improvement since", generations_since_improvement, "mutation_rate is getting raised to", new_rate)
+    def adapt_mutation_rate(current_rate, generations_without_improvement, max_rate=0.05, min_rate=0.01):
+        if generations_without_improvement > 10:  # No improvement for 10 generations
+            new_rate = min(current_rate * 1.3, max_rate)
+            print("No improvement since", generations_without_improvement, "mutation_rate is getting raised to", new_rate)
         else:
             new_rate = max(current_rate * 0.95, min_rate)
-            print("Improvement since", generations_since_improvement, "mutation_rate is getting lowered to", new_rate)
+            print("Improvement since", generations_without_improvement, "mutation_rate is getting lowered to", new_rate)
         return new_rate
 
     def draw_plot_all_gen(line, ax, fig, list_best_damage, list_generation):
@@ -426,7 +425,7 @@ def run_simulation():
 
         list_best_damages = []
         list_generations = []
-        generations_since_improvement = 0
+        generations_without_improvement = 0
         saved_damage_peak = 0.0
 
         ax.axhline(y=global_current_record, color='g', linestyle='--', linewidth=1, label='Current record')
@@ -440,12 +439,15 @@ def run_simulation():
             best_damage = max([evaluate_solution(ga_env, sol)[1] for sol in population])
 
             # Alter mutation_rate
-            if best_damage == saved_damage_peak: # TODO: Nur, wenns 10x dasselbe angezeigt hat, dann stellt auf nen tieferen Wert, der sich dann wieder hochstucken kann, hoffentlich höher...
+            if saved_damage_peak == 0:
                 saved_damage_peak = best_damage
-                generations_since_improvement = 0
+            if best_damage == saved_damage_peak:
+                generations_without_improvement += 1
             else:
-                generations_since_improvement += 1
-            mutation_rate = adapt_mutation_rate(mutation_rate, generations_since_improvement, global_max_mutation_rate, global_min_mutation_rate)
+                generations_without_improvement = 0
+                saved_damage_peak = best_damage
+
+            mutation_rate = adapt_mutation_rate(mutation_rate, generations_without_improvement, global_max_mutation_rate, global_min_mutation_rate)
             # Select the top-performing solutions based on their fitness
             # This could be a function to sort the sum_fitness and select the top indices
             # top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
@@ -475,7 +477,6 @@ def run_simulation():
 
                 new_population.extend([child1, child2])
 
-            print(f"Old population_size: {len(population)}. New: {len(new_population)}")
             population = new_population
 
         plt.ioff()
@@ -531,28 +532,30 @@ def run_simulation():
     print("Sequence of Actions (Spells):", best_solution)
 
 
-global_pop_size = 50
+# const stats
 global_max_damage = 4242.5
+global_current_record = 4065.0
 global_max_ticks = 128
-global_generations = 600
+
+# duration
+global_generations = 2_000
+
+# parameter for cross-entropy
+global_pop_size = 50
 global_population_top_n_index = 0.1
-start_population_mutation_rate = 0.005
+start_population_mutation_rate = 0.01  # 0.005
 global_tournament_k_amount = 5  # 10% of pop_size probably
-global_max_mutation_rate = 0.015
-global_min_mutation_rate = 0.001
+global_max_mutation_rate = 0.01  # 0.02
+global_min_mutation_rate = 0.01  # 0.001
 
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
 # TODO: Diversity Checks
 # TODO: Adaptive Mutation (je nach stagnierung, mehr mutation)
-global_current_record = 4052.5
 
 
 if __name__ == "__main__":
     run_simulation()
-    # Max: 4052.5 / 4242.5
-
-
 
 
 # TODO: Parameteroptimierung, da Overfittung bei 95%
