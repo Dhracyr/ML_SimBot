@@ -538,20 +538,21 @@ global_current_record = 4112.5
 global_max_ticks = 128
 
 # duration
-global_generations = 4_000
+global_generations = 10_000
 
 # parameter for cross-entropy
 global_pop_size = 50
 global_population_top_n_index = 0.1
-start_population_mutation_rate = 0.01  # 0.005
+start_population_mutation_rate = 0.01  # 0.01
 global_tournament_k_amount = 5  # 10% of pop_size probably
-global_max_mutation_rate = 0.015  # 0.02
-global_min_mutation_rate = 0.005  # 0.001
+global_max_mutation_rate = 0.015  # 0.015
+global_min_mutation_rate = 0.005  # 0.005
 
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
 # TODO: Diversity Checks
-# TODO: Adaptive Mutation (je nach stagnierung, mehr mutation)
+# TODO: New Spell: Fireball gives a stack of "flaming", each stack increases the damage of the new spell by 15%, stackable for 20 Stacks
+
 
 
 if __name__ == "__main__":

@@ -177,10 +177,10 @@ class RunSim:
 
     def render(self):
 
-        print(f"Total Damage: {self.training_dummy.damage_taken} damage")
+        print(f"Total Damage: {self.training_dummy.damage_taken} damage, that's {self.training_dummy.damage_taken/4242.5*100:.2f}%")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"Remaining DoT Duration: {self.training_dummy.dot_timer}")
-        print(f"Remaining Buff Duration: {self.character.buff_timer}. "
+        print(f"Remaining Buff Duration: {self.character.buff_timer}."
               f" CD-Buff: {self.spells['Combustion'].current_cooldown}."
               f" CD-Moon: {self.spells['BloodMoonCrescent'].current_cooldown}")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
