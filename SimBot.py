@@ -385,6 +385,15 @@ def run_simulation():
                 solution[i] = np.random.randint(action_space.n)
         return solution
 
+    def adapt_mutation_rate(current_rate, generations_since_improvement, max_rate=0.05, min_rate=0.01):
+        if generations_since_improvement > 10:  # No improvement for 10 generations
+            new_rate = min(current_rate * 1.1, max_rate)
+            print("No improvement since", generations_since_improvement, "mutation_rate is getting raised to", new_rate)
+        else:
+            new_rate = max(current_rate * 0.95, min_rate)
+            print("Improvement since", generations_since_improvement, "mutation_rate is getting lowered to", new_rate)
+        return new_rate
+
     def draw_plot_all_gen(line, ax, fig, list_best_damage, list_generation):
 
         ax.set_xlabel('Generation')
@@ -406,7 +415,7 @@ def run_simulation():
         ax.figure.canvas.draw()
         ax.figure.canvas.flush_events()
         """
-    def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate=0.01):
+    def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate):
         # Initialize population
         population = initialize_population(pop_size, ga_env.action_space, sequence_length)
 
@@ -417,6 +426,8 @@ def run_simulation():
 
         list_best_damages = []
         list_generations = []
+        generations_since_improvement = 0
+        saved_damage_peak = 0.0
 
         ax.axhline(y=global_current_record, color='g', linestyle='--', linewidth=1, label='Current record')
         ax.axhline(y=global_max_damage, color='r', linestyle='-', linewidth=1, label='Max Damage')
@@ -428,9 +439,16 @@ def run_simulation():
             sum_fitness = [evaluate_solution(ga_env, sol)[0] for sol in population]
             best_damage = max([evaluate_solution(ga_env, sol)[1] for sol in population])
 
+            # Alter mutation_rate
+            if best_damage == saved_damage_peak:
+                saved_damage_peak = best_damage
+                generations_since_improvement = 0
+            else:
+                generations_since_improvement += 1
+            mutation_rate = adapt_mutation_rate(mutation_rate, generations_since_improvement, global_max_mutation_rate, global_min_mutation_rate)
             # Select the top-performing solutions based on their fitness
             # This could be a function to sort the sum_fitness and select the top indices
-            top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
+            # top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
             print(f"Generation {generation}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
             # Set up plot for live updating
 
@@ -457,9 +475,8 @@ def run_simulation():
 
                 new_population.extend([child1, child2])
 
-            print(f"Old populationsize: {len(population)}. New: {len(new_population)}")
+            print(f"Old population_size: {len(population)}. New: {len(new_population)}")
             population = new_population
-
 
         plt.ioff()
         plt.show()
@@ -506,7 +523,7 @@ def run_simulation():
     generations = global_generations
     sequence_length = global_max_ticks
 
-    best_population = genetic_algorithm(env, pop_size, generations, sequence_length, population_mutation_rate)
+    best_population = genetic_algorithm(env, pop_size, generations, sequence_length, start_population_mutation_rate)
     fitness_scores = evaluate_population(env, best_population)
     best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
 
@@ -514,16 +531,20 @@ def run_simulation():
     print("Sequence of Actions (Spells):", best_solution)
 
 
-global_pop_size = 30
+global_pop_size = 50
 global_max_damage = 4242.5
 global_max_ticks = 128
-global_generations = 2_000
+global_generations = 600
 global_population_top_n_index = 0.1
-population_mutation_rate = 0.01
-global_tournament_k_amount = 3  # 10% of pop_size probably
+start_population_mutation_rate = 0.005
+global_tournament_k_amount = 5  # 10% of pop_size probably
+global_max_mutation_rate = 0.015
+global_min_mutation_rate = 0.001
+
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
 # TODO: Diversity Checks
+# TODO: Adaptive Mutation (je nach stagnierung, mehr mutation)
 global_current_record = 4052.5
 
 
