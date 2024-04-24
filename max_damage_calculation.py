@@ -159,9 +159,6 @@ class RunSim:
 
     def step(self, action_name):
         # Check last_casted_spell & increase cast_count
-        print("<class 'str'> ScorchDot")
-        print(type(action_name))
-        print(action_name)
         spell = self.spells[action_name]
         if spell.cast(self):
             self.character.last_spell = spell.name
@@ -202,10 +199,14 @@ class RunSim:
             '5': 'Combustion'
         }
         for i in range(ticks_amount):  # Simulate Ticks/Seconds
-            # copied_list = "4 0 3 5 0 2 0 3 0 3 0 3 0 3 0 2 0 3 0 4 0 0 3 0 3 0 3 2 0 3 0 3 0 3 0 0 3 4 2 0 3 0 3 0 0 3 4 0 3 0 3 2 0 3 0 3 0 3 0 3 4 0 3 0 0 3 0 5 4 2 0 0 3 0 3 0 3 0 3 0 2 0 3 0 3 0 4 0 0 3 2 0 0 3 0 3 0 0 3 0 2 0 3 4 0 0 3 0 3 0 2 0 0 3 0 3 0 3 0 3 2 0 3 0 3 0 3 0".split()
-            # spell_sequence = [int(num) for num in copied_list]
-            # converted_sequence = [spell_map[spell] for spell in spell_sequence]
-            # chosen_spell = converted_sequence[i]
+
+            # Simulate a copied_list:
+            copied_list = "2 5 4 0 0 3 4 0 3 0 3 2 0 3 0 3 0 3 0 3 0 3 2 0 3 4 0 3 0 3 0 3 0 3 0 3 2 0 3 4 0 3 0 3 0 3 0 3 2 0 0 3 0 3 0 3 0 3 4 0 3 5 2 0 0 3 4 0 3 0 3 0 3 2 0 0 3 0 3 0 3 0 3 2 0 3 0 3 4 0 3 0 3 2 0 3 0 3 0 3 0 3 0 3 4 2 0 3 0 3 0 3 0 3 0 2 0 3 0 3 0 3 5 0 3 2 0 3".split()
+            chosen_spell = spell_map[copied_list[i]]
+            self.step(chosen_spell)
+
+            # Simulator for playing yourself:
+            """
             print(f"This is input {i} of {ticks_amount}. Enter a spell")
             chosen_input = input()
             if chosen_input in spell_map:
@@ -215,6 +216,7 @@ class RunSim:
             else:
                 print("Invalid input, please enter a valid spell number.")
                 continue  # Skip to the next iteration if the input is invalid
+            """
 
 
 if __name__ == "__main__":

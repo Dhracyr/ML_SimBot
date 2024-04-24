@@ -534,19 +534,19 @@ def run_simulation():
 
 # const stats
 global_max_damage = 4242.5
-global_current_record = 4065.0
+global_current_record = 4112.5
 global_max_ticks = 128
 
 # duration
-global_generations = 2_000
+global_generations = 4_000
 
 # parameter for cross-entropy
 global_pop_size = 50
 global_population_top_n_index = 0.1
 start_population_mutation_rate = 0.01  # 0.005
 global_tournament_k_amount = 5  # 10% of pop_size probably
-global_max_mutation_rate = 0.01  # 0.02
-global_min_mutation_rate = 0.01  # 0.001
+global_max_mutation_rate = 0.015  # 0.02
+global_min_mutation_rate = 0.005  # 0.001
 
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
@@ -568,8 +568,8 @@ if __name__ == "__main__":
 6 Stages of Success:
     1. Done!        Stop casting spells, that are on cooldown
     2. Done!        Stop casting Frostbolt, because its useless
-    3. 90%!         Stop casting DoT, when its already active
-    4. 99%!         Casting Combustion and BloodMoon on Cooldown, because it does most damage
-    5. Often!       Alternating between Fireball and Blaze
-    6. Not yet!     Waiting for BloodMoon cooldown when buff-cd is going to expire soon
+    3. Done!        Stop casting DoT, when its already active
+    4. Done!        Casting Combustion and BloodMoon on Cooldown, because it does most damage
+    5. Done!        Alternating between Fireball and Blaze
+    6. Oftentimes!  Waiting for BloodMoon cooldown when buff-cd is going to expire soon
 """
