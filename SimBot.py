@@ -214,83 +214,6 @@ class RunSim:
         return np.array(state, dtype=np.float32)
 
 
-def draw_plot(plot_env, model, ax, obs):
-    tick_count = 0
-    tick_data = []
-    reward_data = []
-
-    max_damage = 0
-    max_stats = []
-
-    for i in range(global_max_ticks):
-        action, _ = model.predict(obs)
-        obs, rewards, dones, info = plot_env.step(action)
-
-        # Manage the plot update
-        tick_data.append(tick_count)
-        reward_data.append(rewards)
-
-        ax.set_xlabel('Ticks')
-        ax.set_ylabel('Total Damage')  # Max-Damage possible: 4242.5 in global_max_ticks-Ticks
-        ax.set_xlim(0, global_max_ticks)
-        ax.set_ylim(0, global_max_damage)  # 4242.5
-        ax.plot(tick_data, reward_data, color='red', alpha=0.8)
-        display(plt.gcf())
-        # clear_output(wait=True)
-
-        if dones:
-            obs = plot_env.reset()
-            tick_count = 0
-            tick_data = []
-            reward_data = []
-        else:
-            tick_count += 1
-            if rewards > max_damage:
-                max_damage = rewards
-                max_stats = obs[7]*global_max_ticks, obs[8]*global_max_ticks, obs[9]*global_max_ticks,\
-                    obs[10]*global_max_ticks, obs[11]*global_max_ticks, obs[12]*global_max_ticks
-            # if rewards < max_damage:
-            # min_damage = rewards
-            # min_stats = obs[7]*global_max_ticks, obs[8]*global_max_ticks, obs[9]*global_max_ticks, obs[10]*global_max_ticks, obs[11]*global_max_ticks, obs[12]*global_max_ticks
-
-    plt.show()
-
-    # Evaluate the policy
-    # mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=20)
-    # print(f"Evaluation: mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
-
-    def print_best_and_worst():
-        if None not in max_stats:
-            print(f"{max_damage} of {global_max_damage}, that's {max_damage/global_max_damage*100:.2f}%")
-            print(f"Fireball used: {max_stats[0]}")
-            print(f"Frostbolt used: {max_stats[1]}")
-            print(f"BloodMoonCrescent used: {max_stats[2]}")
-            print(f"Blaze used: {max_stats[3]}")
-            print(f"ScorchDot used: {max_stats[4]}")
-            print(f"Combustion used: {max_stats[5]}")
-        else:
-            print("fuck you")
-
-            # print("------"*5)
-            # print("------"*5)
-            # print worst one
-            """
-        if None not in min_stats:
-            print(min_damage, "of", global_max_damage)
-            print(f"Fireball used: {min_stats[0]}")
-            print(f"Frostbolt used: {min_stats[1]}")
-            print(f"BloodMoonCrescent used: {min_stats[2]}")
-            print(f"Blaze used: {min_stats[3]}")
-            print(f"ScorchDot used: {min_stats[4]}")
-            print(f"Combustion used: {min_stats[5]}")
-        else:
-            print("fuck you")
-            """
-    print_best_and_worst()
-
-    plot_env.close()
-
-
 def run_simulation():
     class RunSimEnv(gym.Env):
         def __init__(self):
@@ -414,10 +337,11 @@ def run_simulation():
         ax.figure.canvas.draw()
         ax.figure.canvas.flush_events()
         """
+    list_all_solutions = []
+
     def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate):
         # Initialize population
         population = initialize_population(pop_size, ga_env.action_space, sequence_length)
-
         os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
         plt.ion()
         fig = plt.figure()
@@ -425,6 +349,7 @@ def run_simulation():
 
         list_best_damages = []
         list_generations = []
+
         generations_without_improvement = 0
         saved_damage_peak = 0.0
 
@@ -434,8 +359,8 @@ def run_simulation():
         line1, = ax.plot(list_generations, list_best_damages, linestyle='-', color='b')
 
         for generation in range(generations):
+
             # Evaluate all solutions in the population
-            sum_fitness = [evaluate_solution(ga_env, sol)[0] for sol in population]
             best_damage = max([evaluate_solution(ga_env, sol)[1] for sol in population])
 
             # Alter mutation_rate
@@ -447,18 +372,22 @@ def run_simulation():
                 generations_without_improvement = 0
                 saved_damage_peak = best_damage
 
+            # Adapt mutation_rate if there are too many generations without improvement
             mutation_rate = adapt_mutation_rate(mutation_rate, generations_without_improvement, global_max_mutation_rate, global_min_mutation_rate)
-            # Select the top-performing solutions based on their fitness
-            # This could be a function to sort the sum_fitness and select the top indices
-            # top_indices = np.argsort(sum_fitness)[-int(global_population_top_n_index * len(sum_fitness)):]  # Get top 10% indices
-            print(f"Generation {generation}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
-            # Set up plot for live updating
 
+            # Print the damage that the generation did
+            print(f"Generation {generation}: Max Damage {best_damage} of {global_max_damage}, that's {best_damage/global_max_damage*100:.2f}%")
+
+            # Set up plot for live updating
             list_best_damages.append(best_damage)
             list_generations.append(generation)
 
+            # Draw live-plot
             draw_plot_all_gen(line1, ax, fig, list_best_damages, list_generations)
             plt.pause(0.01)
+
+            # Save generation in list
+            list_all_solutions.append(max(evaluate_population(ga_env, population), key=lambda x: x[1]))
 
             # Create the next generation
             new_population = []
@@ -483,41 +412,6 @@ def run_simulation():
         plt.show()
         return population
 
-    """
-    # Initialize the custom environment
-    env = DummyVecEnv([lambda: RunSimEnv()])
-    # env = RunSimEnv()
-    os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
-
-    # Set up plot for live updating
-    fig, ax = plt.subplots()
-
-    # Initialize & train the RL model
-    model = PPO("MlpPolicy", env, verbose=1,
-                gamma=0.9,
-                n_steps=2048,
-                ent_coef=0.01,
-                batch_size=2048,
-                gae_lambda=0.95)\
-        .learn(total_timesteps=1000)
-    
-    # Save the model
-    save_dir = "/tmp/gym/"
-    os.makedirs(save_dir, exist_ok=True)
-    model.save(f"{save_dir}/ppo_runsim")
-
-    # Load model
-    
-    # Optionally, you can reload it
-        # model = PPO.load(f"{save_dir}/ppo_runsim", env=env, verbose=1)
-    # show the save hyperparameters
-        # print(f"loaded: gamma={model.gamma}, n_steps={model.n_steps}")
-    # as the environment is not serializable, we need to set a new instance of the environment
-        # model.set_env(DummyVecEnv([lambda: RunSimEnv()]))
-        # model.learn(8000)
-    
-    """
-
     env = RunSimEnv()
 
     pop_size = global_pop_size
@@ -529,7 +423,9 @@ def run_simulation():
     best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
 
     print("Best Performing Solution:")
-    print("Sequence of Actions (Spells):", best_solution)
+    print("Sequence of recent actions (spells):", best_solution)
+    print("Sequence of best actions (spells):", max(list_all_solutions, key=lambda x: x[1]))
+    # print(list_all_solutions)
 
 
 # const stats
@@ -538,13 +434,13 @@ global_current_record = 4112.5
 global_max_ticks = 128
 
 # duration
-global_generations = 10_000
+global_generations = 100
 
 # parameter for cross-entropy
-global_pop_size = 50
+global_pop_size = 30  # 50
 global_population_top_n_index = 0.1
 start_population_mutation_rate = 0.01  # 0.01
-global_tournament_k_amount = 5  # 10% of pop_size probably
+global_tournament_k_amount = 3  # 10% of pop_size probably
 global_max_mutation_rate = 0.015  # 0.015
 global_min_mutation_rate = 0.005  # 0.005
 
@@ -552,7 +448,6 @@ global_min_mutation_rate = 0.005  # 0.005
 # TODO: Reward Function that punishes similarity
 # TODO: Diversity Checks
 # TODO: New Spell: Fireball gives a stack of "flaming", each stack increases the damage of the new spell by 15%, stackable for 20 Stacks
-
 
 
 if __name__ == "__main__":
