@@ -228,45 +228,75 @@ def run_simulation():
                 random_float = xoroshiro128p_uniform_float32(rng_states, idx)
                 cuda_output[idx, i] = int(random_float * action_space_n)
 
-    def evaluate_population(ep_env, population):
+    """
+    def evaluate_population(population):
         fitness_scores = []
         for solution in population:
-            fitness = evaluate_solution(ep_env, solution)[0]
+            fitness = evaluate_solution(solution)[0]
             fitness_scores.append((solution, fitness))
         return fitness_scores
+    """
 
     def evaluate_solution(es_env, solution):
-        obs = es_env.reset()
-        total_reward = 0
-        best_reward = 0
-        for action in solution:
-            obs, reward, done, info = es_env.step(action)
-            total_reward += reward
-            if reward > best_reward:
-                best_reward = reward
-            if done:
-                break
-        return [total_reward, best_reward]
+        spell_map = {
+            0: 'Fireball',
+            1: 'Frostbolt',
+            2: 'BloodMoonCrescent',
+            3: 'Blaze',
+            4: 'ScorchDot',
+            5: 'Combustion'
+        }
+        for name_action in solution:
+            chosen_spell = spell_map[name_action]
+            es_env.step(chosen_spell)
 
-    def crossover(parent1, parent2):
+        damage_done_with_solution = es_env.training_dummy.damage_taken
+        # Reset the trainingsdummy for next solution
+        es_env.reset()
+        return damage_done_with_solution
+
+    @cuda.jit(device=True)
+    def crossover(parent1, parent2, rng_states, idx):
+        crossover_point = int(xoroshiro128p_uniform_float32(rng_states, idx) * (len(parent1) - 1)) + 1
         # Single-point crossover
-        crossover_point = np.random.randint(1, len(parent1))
-        child1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
-        child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
+
+        # Allocate space for children
+        child1 = cuda.local.array(shape=(256,), dtype=numba.float32)
+        child2 = cuda.local.array(shape=(256,), dtype=numba.float32)
+
+        # Create child1 by copying parts of parent1 and parent2
+        for i in range(crossover_point):
+            child1[i] = parent1[i]
+        for i in range(crossover_point, len(parent1)):
+            child1[i] = parent2[i]
+
+        # Create child2 by copying parts of parent2 and parent1
+        for i in range(crossover_point):
+            child2[i] = parent2[i]
+        for i in range(crossover_point, len(parent1)):
+            child2[i] = parent1[i]
+
         return child1, child2
 
-    def tournament_selection(population, k=3):
-        indices = np.random.randint(0, len(population), k)
-        best = indices[0]
-        for idx in indices[1:]:
-            if evaluate_solution(population[idx]) > evaluate_solution(population[best]):
-                best = idx
-        return population[best]
+    @cuda.jit(device=True)
+    def tournament_selection(population, all_damage_as_list, rng_states, idx):
+        indices = cuda.local.array(shape=(global_tournament_k_amount,), dtype=numba.int32)
+        for i in range(global_tournament_k_amount):
+            random_idx = int(xoroshiro128p_uniform_float32(rng_states, idx) * len(population))
+            indices[i] = random_idx
 
-    def mutate(solution, mutation_rate, action_space_n):
+        best_idx = indices[0]
+        for j in range(1, global_tournament_k_amount):
+            if all_damage_as_list[indices[j]] > all_damage_as_list[best_idx]:
+                best_idx = indices[j]
+        return best_idx
+
+    @cuda.jit(device=True)
+    def mutate(solution, mutation_rate, action_space_n, rng_states, idx):
         for i in range(len(solution)):
-            if np.random.rand() < mutation_rate:
-                solution[i] = np.random.randint(action_space_n)
+            if xoroshiro128p_uniform_float32(rng_states, idx + i) < mutation_rate:
+                random_value = int(xoroshiro128p_uniform_float32(rng_states, idx + i) * action_space_n)
+                solution[i] = random_value
         return solution
 
     def adapt_mutation_rate(current_rate, generations_without_improvement, max_rate=0.05, min_rate=0.01):
@@ -301,11 +331,11 @@ def run_simulation():
         ax.figure.canvas.flush_events()
         """
 
-    @cuda.jit()
     def reproduce(generation, generations_without_improvement,
-                  mutation_rate, pop_size, population, saved_damage_peak, action_space_n):
-        # Evaluate all solutions in the population
-        best_damage = max([evaluate_solution(sol)[1] for sol in population])
+                  mutation_rate, pop_size, population, saved_damage_peak,
+                  action_space_n, blocks_per_grid, threads_per_block, best_damage,
+                  all_damage_as_list, rng_states):
+
         # Alter mutation_rate
         if saved_damage_peak == 0:
             saved_damage_peak = best_damage
@@ -324,28 +354,35 @@ def run_simulation():
         # Create the next generation
         new_population = []
 
-        # Calculate grid dimensions for cuda
-        threads_per_block = 64
-        blocks_per_grid = (pop_size + threads_per_block - 1) // threads_per_block
-        reproduce_kernel[blocks_per_grid, threads_per_block](population, new_population, mutation_rate, action_space_n)
+        new_population = reproduce_kernel[blocks_per_grid, threads_per_block](population,
+                                                                              mutation_rate,
+                                                                              action_space_n,
+                                                                              all_damage_as_list,
+                                                                              rng_states)
 
         return new_population, saved_damage_peak, generations_without_improvement
 
     @cuda.jit()
-    def reproduce_kernel(population, new_population, mutation_rate, action_space_n):
-        for i in range(0, len(population), 2):
+    def reproduce_kernel(population, mutation_rate, action_space_n, all_damage_as_list, rng_states):
+        new_population = []
+        idx = cuda.grid(1)
+        if idx < population.shape[0] // 2:
             # Tournament Selection
-            parent1 = tournament_selection(population, global_tournament_k_amount)
-            parent2 = tournament_selection(population, global_tournament_k_amount)
+            idx_parent1 = tournament_selection(population, all_damage_as_list, rng_states, idx)
+            idx_parent2 = tournament_selection(population, all_damage_as_list, rng_states, idx)
+            parent1 = population[idx_parent1]
+            parent2 = population[idx_parent2]
 
-            child1, child2 = crossover(parent1, parent2)
+            child1, child2 = crossover(parent1, parent2, rng_states, idx)
 
-            child1 = mutate(child1, mutation_rate, action_space_n)
-            child2 = mutate(child2, mutation_rate, action_space_n)
+            child1 = mutate(child1, mutation_rate, action_space_n, rng_states, idx)
+            child2 = mutate(child2, mutation_rate, action_space_n, rng_states, idx)
 
-            new_population[i] = child1
-            if i + 1 < len(population):
-                new_population[i+1] = child2
+            for i in range(len(child1)):
+                new_population[idx * 2, i] = child1[i]
+                if (idx * 2 + 1) < population.shape[0]:
+                    new_population[idx * 2 + 1, i] = child2[i]
+
         return new_population
 
     list_all_solutions = []
@@ -388,23 +425,31 @@ def run_simulation():
 
         # Reproduce every generation
         for generation in range(generations):
-            cuda.device_array_like(population)
-            population = reproduce[blocks_per_grid, threads_per_block](ga_env, generation,
-                                                                       generations_without_improvement,
-                                                                       mutation_rate, pop_size, population,
-                                                                       saved_damage_peak)
+            # Evaluate all solutions in the population via RunSim()
+            all_damage_as_list = [evaluate_solution(ga_env, sol) for sol in population]
+            all_damage_as_list = np.array(all_damage_as_list, dtype=np.float32)
+            max_damage = np.max(all_damage_as_list)
+
+            population_device = cuda.device_array_like(population)
+            reproduce(generation, generations_without_improvement,
+                      mutation_rate, pop_size, population_device,
+                      saved_damage_peak, action_space_n, blocks_per_grid,
+                      threads_per_block, max_damage, all_damage_as_list, rng_states)
+
+            population = population_device.copy_to_host()
+
             # Set up plot for live updating
-            list_best_damages.append(np.max(population))
+            list_best_damages.append(max_damage)
             list_generations.append(generation)
             # Draw live-plot
             draw_plot_all_gen(line1, ax, fig, list_best_damages, list_generations)
             plt.pause(0.01)
             # Save generation in list
-            list_all_solutions.append(max(evaluate_population(ga_env, population), key=lambda x: x[1]))
+            list_all_solutions.append(population)
 
         plt.ioff()
         plt.show()
-        return population
+        return list_all_solutions
 
     env = RunSim()
 
@@ -413,10 +458,10 @@ def run_simulation():
     sequence_length = global_max_ticks
 
     best_population = genetic_algorithm(env, pop_size, generations, sequence_length, start_population_mutation_rate)
-    fitness_scores = evaluate_population(env, best_population)
-    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
+    best_solution = max(list_all_solutions)
 
-    print("Best Performing Solution:")
+    # print("Best Performing Solution:")
+    print("All Performing Solution:", best_population)
     print("Sequence of recent actions (spells):", best_solution)
     print("Sequence of best actions (spells):", max(list_all_solutions, key=lambda x: x[1]))
     # print(list_all_solutions)
