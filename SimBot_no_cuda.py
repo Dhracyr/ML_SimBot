@@ -1,18 +1,81 @@
 import os
-import numba
+import gym
 import numpy as np
 
 from ml_simbot_spells import *
 from ml_simbot_trainingsdummy import *
 from ml_simbot_character import *
 
+from gym import spaces
 from matplotlib import pyplot as plt
-from numba import cuda, njit
-from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
 
 
+class RunSim:
+    training_dummy = None
 
+    def __init__(self):
+        self.character = Character()
+        self.training_dummy = TrainingDummy(self.character)    # Because the trainingsdummy must know,
+        # List of spells                                            # the buff of the player
+        self.spells = {
 
+            'Fireball': Fireball('Fireball', 0, 10),                                # Name, Cooldown, Damage
+            'Frostbolt': Frostbolt('Frostbolt', 0, 3),                              # Name, Cooldown, Damage
+            'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80),    # Name, Cooldown, Damage
+            'Blaze': Blaze('Blaze', 0, 5),                                          # Name, Cooldown, Damage
+            'ScorchDot': ScorchDot('ScorchDot', 0, 20, 5),                          # Name, Cooldown, Duration, Damage
+            'Combustion': Combustion('Combustion', 60, 25, 0.5)                     # Name, Cooldown, Duration, Damage_increase
+        }
+        self.spell_cast_count = {name: 0 for name in self.spells.keys()}
+
+    # Reset-function for Reinforcement Learning
+    def reset(self):
+        self.character = Character()
+        self.training_dummy = TrainingDummy(self.character)
+        for spell in self.spells.values():
+            spell.current_cooldown = 0
+        self.spell_cast_count = {name: 0 for name in self.spells.keys()}
+        return self.get_results()
+
+    def step(self, action_name):
+        # Check last_casted_spell & increase cast_count
+        spell = self.spells[action_name]
+        if spell.cast(self):
+            self.character.last_spell = spell.name
+            self.spell_cast_count[action_name] += 1
+
+        # Check Dot-Spell/Buff Tick
+        self.training_dummy.tick()
+        self.character.tick()
+
+        # Check Cooldown Tick
+        for spell in self.spells.values():
+            spell.cooldown_tick()
+
+        # Create output for visualisation
+        self.render()
+
+    def render(self):
+        """
+        print(f"Total Damage: {self.training_dummy.damage_taken} damage")
+        print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
+        print(f"Remaining DoT Duration: {self.training_dummy.dot_timer}")
+        print(f"Remaining Buff Duration: {self.character.buff_timer}. "
+              f" CD-Buff: {self.spells['Combustion'].current_cooldown}."
+              f" CD-Moon: {self.spells['BloodMoonCrescent'].current_cooldown}")
+        print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
+        print(f"Spell cast last time: {self.character.last_spell}")
+        print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
+        print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
+        print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
+        """
+
+    def get_results(self):
+        cooldowns = [spell.current_cooldown / 60 for _, spell in self.spells.items()]
+        cast_counts = [self.spell_cast_count[name] / GLOBAL_MAX_TICKS for name in self.spells.keys()]
+        last_spell = [1] if self.character.last_spell == 'Blaze' else [0]
+        state = [self.training_dummy.damage_taken] + cooldowns + cast_counts + last_spell
+        return np.array(state, dtype=np.float32)
 
 
 def run_simulation():
@@ -50,6 +113,7 @@ def run_simulation():
             # Create output for visualisation
             self.render()
 
+        """
         def reset(self):
             self.character = Character()
             self.training_dummy = TrainingDummy(self.character)
@@ -57,6 +121,7 @@ def run_simulation():
                 spell.current_cooldown = 0
             self.spell_cast_count = {name: 0 for name in self.spells.keys()}
             return self.get_results()
+        """
 
         def render(self):
             """
@@ -84,25 +149,15 @@ def run_simulation():
             return np.array(state, dtype=np.float32)
 
     def initialize_population(pop_size, action_space, sequence_length):
-        return [np.random.randint(action_space.n, size=sequence_length)
+        return [np.random.randint(action_space, size=sequence_length)
                 for _ in range(pop_size)]
 
-    @cuda.jit
-    def initialize_population_cuda(rng_states, action_space_n, sequence_length, cuda_output):
-        idx = cuda.grid(1)
-        if idx < cuda_output.shape[0]:
-            for i in range(sequence_length):
-                random_float = xoroshiro128p_uniform_float32(rng_states, idx)
-                cuda_output[idx, i] = int(random_float * action_space_n)
-
-    """
-    def evaluate_population(population):
+    def evaluate_population(ep_env, population):
         fitness_scores = []
         for solution in population:
-            fitness = evaluate_solution(solution)[0]
+            fitness = evaluate_solution(ep_env, solution)[0]
             fitness_scores.append((solution, fitness))
         return fitness_scores
-    """
 
     def evaluate_solution(es_env, solution):
         spell_map = {
@@ -118,55 +173,41 @@ def run_simulation():
             es_env.step(chosen_spell)
 
         damage_done_with_solution = es_env.training_dummy.damage_taken
-        # Reset the trainingsdummy for next solution
-        es_env.reset()
+
         return damage_done_with_solution
 
-    @cuda.jit(device=True)
-    def crossover(child1, child2, parent1, parent2, rng_states, idx):
-        crossover_point = int(xoroshiro128p_uniform_float32(rng_states, idx) * len(parent1))
+    def crossover(parent1, parent2):
         # Single-point crossover
-
-        # Create child1 by copying parts of parent1 and parent2
-        for i in range(crossover_point):
-            child1[i] = parent1[i]
-        for i in range(crossover_point, len(parent1)):
-            child1[i] = parent2[i]
-
-        # Create child2 by copying parts of parent2 and parent1
-        for i in range(crossover_point):
-            child2[i] = parent2[i]
-        for i in range(crossover_point, len(parent1)):
-            child2[i] = parent1[i]
-
+        crossover_point = np.random.randint(1, len(parent1))
+        child1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+        child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
         return child1, child2
 
-    @cuda.jit(device=True)
-    def tournament_selection(population, all_damage_as_list, rng_states, idx):
-        indices = cuda.local.array(shape=(global_tournament_k_amount,), dtype=numba.int32)
-        for i in range(global_tournament_k_amount):
-            random_idx = int(xoroshiro128p_uniform_float32(rng_states, idx) * len(population))
-            indices[i] = random_idx
+    def tournament_selection(ts_env, population, k=3):
+        idxes = [np.random.randint(len(population)) for _ in range(k)]
+        selected = [population[idx] for idx in idxes]
+        selected_fitness = [evaluate_solution(ts_env, sol) for sol in selected]
 
-        best_idx = indices[0]
-        for j in range(1, global_tournament_k_amount):
-            if all_damage_as_list[indices[j]] > all_damage_as_list[best_idx]:
-                best_idx = indices[j]
-        return best_idx
+        # Find the index of the solution with the highest total_reward manually
+        max_fitness = -float('inf')  # Assumes fitness can't be lower than this
+        best_index = 0
+        for i, fitness in enumerate(selected_fitness):
+            if fitness > max_fitness:  # Assuming the first element is total_reward
+                max_fitness = fitness
+                best_index = i
 
-    @cuda.jit(device=True)
-    def mutate(solution, mutation_rate, action_space_n, rng_states, idx):
+        return selected[best_index]
+
+    def mutate(solution, mutation_rate, action_space):
         for i in range(len(solution)):
-            if xoroshiro128p_uniform_float32(rng_states, idx + i) < mutation_rate:
-                new_action = int(xoroshiro128p_uniform_float32(rng_states, idx + i) * action_space_n)
-                solution[i] = new_action % action_space_n
+            if np.random.rand() < mutation_rate:
+                solution[i] = np.random.randint(action_space)
         return solution
 
     def adapt_mutation_rate(current_rate, generations_without_improvement, max_rate=0.05, min_rate=0.01):
         if generations_without_improvement > 10:  # No improvement for 10 generations
             new_rate = min(current_rate * 1.3, max_rate)
-            print("No improvement since", generations_without_improvement, "mutation_rate is getting raised to",
-                  new_rate)
+            print("No improvement since", generations_without_improvement, "mutation_rate is getting raised to", new_rate)
         else:
             new_rate = max(current_rate * 0.95, min_rate)
             print("Improvement since", generations_without_improvement, "mutation_rate is getting lowered to", new_rate)
@@ -177,7 +218,7 @@ def run_simulation():
         ax.set_xlabel('Generation')
         ax.set_ylabel('Total Damage')
         ax.set_xlim(0, global_generations)  # Use the number of generations for the x-axis limit
-        ax.set_ylim(0, GLOBAL_MAX_DAMAGE * 1.1)  # Set maximum possible damage
+        ax.set_ylim(0, GLOBAL_MAX_DAMAGE*1.1)  # Example: set maximum possible damage
 
         line.set_data(list_generation, list_best_damage)
 
@@ -193,137 +234,83 @@ def run_simulation():
         ax.figure.canvas.draw()
         ax.figure.canvas.flush_events()
         """
-
-    def reproduce(generation, generations_without_improvement,
-                  mutation_rate, pop_size, population_input_device, saved_damage_peak,
-                  action_space_n, blocks_per_grid, threads_per_block, best_damage,
-                  all_damage_as_list, rng_states):
-
-        # Alter mutation_rate
-        if saved_damage_peak == 0:
-            saved_damage_peak = best_damage
-        if best_damage == saved_damage_peak:
-            generations_without_improvement += 1
-        else:
-            generations_without_improvement = 0
-            saved_damage_peak = best_damage
-        # Adapt mutation_rate if there are too many generations without improvement
-        mutation_rate = adapt_mutation_rate(mutation_rate, generations_without_improvement, global_max_mutation_rate,
-                                            global_min_mutation_rate)
-        # Print the damage that the generation did
-        print(
-            f"Generation {generation}: Max Damage {best_damage} of {GLOBAL_MAX_DAMAGE}, that's {best_damage / GLOBAL_MAX_DAMAGE * 100:.2f}%")
-
-        # Create the next generation
-        # Create new_population for cuda
-        output_population = cuda.device_array((pop_size, GLOBAL_MAX_TICKS),
-                                              dtype=np.float32)
-
-        reproduce_kernel[blocks_per_grid, threads_per_block](population_input_device,
-                                                             output_population,
-                                                             mutation_rate,
-                                                             action_space_n,
-                                                             all_damage_as_list,
-                                                             rng_states)
-        new_population = population_input_device.copy_to_host()
-
-        return new_population, saved_damage_peak, generations_without_improvement
-
-    @cuda.jit()
-    def reproduce_kernel(population, output_population, mutation_rate, action_space_n, all_damage_as_list, rng_states):
-        idx = cuda.grid(1)
-        if idx < population.shape[0] // 2:
-            # Tournament Selection
-            idx_parent1 = tournament_selection(population, all_damage_as_list, rng_states, idx)
-            idx_parent2 = tournament_selection(population, all_damage_as_list, rng_states, idx)
-
-            parent1 = population[idx_parent1]
-            parent2 = population[idx_parent2]
-
-            # Allocate space for children
-            child1 = cuda.local.array(shape=(128,), dtype=numba.float32)
-            child2 = cuda.local.array(shape=(128,), dtype=numba.float32)
-
-            crossover(child1, child2, parent1, parent2, rng_states, idx)
-            child1 = mutate(child1, mutation_rate, action_space_n, rng_states, idx)
-            child2 = mutate(child2, mutation_rate, action_space_n, rng_states, idx)
-
-            for i in range(128):
-                population[idx * 2, i] = child1[i]
-                if (idx * 2 + 1) < population.shape[0]:
-                    population[idx * 2 + 1, i] = child2[i]
-
     list_all_solutions = []
 
     def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_rate):
-        # Get action space for cuda
         action_space_n = ga_env.get_action_space_n()
-
         # Initialize population
-        output_array = cuda.device_array((pop_size, sequence_length),
-                                         dtype=np.float32)
-
-        # Calculate grid dimensions for cuda
-        threads_per_block = 64
-        blocks_per_grid = (pop_size + threads_per_block - 1) // threads_per_block
-
-        # Random workaround for cuda
-        rng_states = create_xoroshiro128p_states(threads_per_block * blocks_per_grid, seed=GLOBAL_STARTING_SEED)
-
-        # Launch Kernel
-        # population = initialize_population(pop_size, ga_env.action_space, sequence_length)
-        initialize_population_cuda[blocks_per_grid, threads_per_block](rng_states, action_space_n, sequence_length,
-                                                                       output_array)
-        population = output_array.copy_to_host()
-
+        population = initialize_population(pop_size, action_space_n, sequence_length)
         os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # This is specific to certain OS environments
         plt.ion()
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
 
         list_best_damages = []
         list_generations = []
+
         generations_without_improvement = 0
         saved_damage_peak = 0.0
 
-        fig, ax = plt.subplots()
-        line1, = ax.plot(list_generations, list_best_damages, linestyle='-', color='b')
         ax.axhline(y=GLOBAL_CURRENT_RECORD, color='g', linestyle='--', linewidth=1, label='Current record')
         ax.axhline(y=GLOBAL_MAX_DAMAGE, color='r', linestyle='-', linewidth=1, label='Max Damage')
 
-        # Reproduce every generation
+        line1, = ax.plot(list_generations, list_best_damages, linestyle='-', color='b')
+
         for generation in range(generations):
+
             # Evaluate all solutions in the population via RunSim()
             all_damage_as_list = [evaluate_solution(ga_env, sol) for sol in population]
             all_damage_as_list = np.array(all_damage_as_list, dtype=np.float32)
-            max_damage = np.max(all_damage_as_list)
+            best_damage = np.max(all_damage_as_list)
+
+            # Alter mutation_rate
+            if saved_damage_peak == 0:
+                saved_damage_peak = best_damage
+            if best_damage == saved_damage_peak:
+                generations_without_improvement += 1
+            else:
+                generations_without_improvement = 0
+                saved_damage_peak = best_damage
+
+            # Adapt mutation_rate if there are too many generations without improvement
+            mutation_rate = adapt_mutation_rate(mutation_rate, generations_without_improvement, global_max_mutation_rate, global_min_mutation_rate)
+
+            # Print the damage that the generation did
+            print(f"Generation {generation}: Max Damage {best_damage} of {GLOBAL_MAX_DAMAGE}, that's {best_damage/GLOBAL_MAX_DAMAGE*100:.2f}%")
 
             # Set up plot for live updating
-            list_best_damages.append(max_damage)
+            list_best_damages.append(best_damage)
             list_generations.append(generation)
+
             # Draw live-plot
             draw_plot_all_gen(line1, ax, fig, list_best_damages, list_generations)
             plt.pause(0.01)
+
             # Save generation in list
             list_all_solutions.append(population)
 
-            # Create a new population
-            population_device = cuda.device_array_like(population)
-            new_population, saved_damage_peak, generations_without_improvement = reproduce(generation,
-                                                                                           generations_without_improvement,
-                                                                                           mutation_rate, pop_size,
-                                                                                           population_device,
-                                                                                           saved_damage_peak,
-                                                                                           action_space_n,
-                                                                                           blocks_per_grid,
-                                                                                           threads_per_block,
-                                                                                           max_damage,
-                                                                                           all_damage_as_list,
-                                                                                           rng_states)
+            # Create the next generation
+            new_population = []
+            while len(new_population) < pop_size:
+                # Random of top 10%
+                # index1, index2 = np.random.choice(len(top_indices), 2, replace=False)
+                # parent1, parent2 = population[index1], population[index2]
+
+                # Tournament Selection
+                parent1 = tournament_selection(ga_env, population, global_tournament_k_amount)
+                parent2 = tournament_selection(ga_env, population, global_tournament_k_amount)
+
+                child1, child2 = crossover(parent1, parent2)
+                child1 = mutate(child1, mutation_rate, action_space_n)
+                child2 = mutate(child2, mutation_rate, action_space_n)
+
+                new_population.extend([child1, child2])
+
+            population = new_population
 
         plt.ioff()
         plt.show()
-        return list_all_solutions
+        return population
 
     env = RunSim()
 
@@ -332,10 +319,10 @@ def run_simulation():
     sequence_length = GLOBAL_MAX_TICKS
 
     best_population = genetic_algorithm(env, pop_size, generations, sequence_length, start_population_mutation_rate)
-    best_solution = max(list_all_solutions)
+    fitness_scores = evaluate_population(env, best_population)
+    best_solution, best_fitness = max(fitness_scores, key=lambda x: x[1])
 
-    # print("Best Performing Solution:")
-    print("All Performing Solution:", best_population)
+    print("Best Performing Solution:")
     print("Sequence of recent actions (spells):", best_solution)
     print("Sequence of best actions (spells):", max(list_all_solutions, key=lambda x: x[1]))
     # print(list_all_solutions)
@@ -345,10 +332,9 @@ def run_simulation():
 GLOBAL_MAX_DAMAGE = 4242.5
 GLOBAL_CURRENT_RECORD = 4112.5
 GLOBAL_MAX_TICKS = 128
-GLOBAL_STARTING_SEED = 1234
 
 # duration
-global_generations = 1000
+global_generations = 100
 
 # parameter for cross-entropy
 global_pop_size = 30  # 50
@@ -366,6 +352,7 @@ global_min_mutation_rate = 0.005  # 0.005
 
 if __name__ == "__main__":
     run_simulation()
+
 
 # TODO: Parameteroptimierung, da Overfittung bei 95%
 # TODO: Plotten von Generationen in Farben
