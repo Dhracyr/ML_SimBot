@@ -249,24 +249,24 @@ def run_simulation():
 
 
 # duration
-global_generations = 2000
+global_generations = 200000
 
 # parameter for cross-entropy
 global_pop_size = 50  # 50
-global_tournament_k_amount = 5  # 10% of pop_size probably
+global_tournament_k_amount = 8  # 10% of pop_size probably
 start_population_mutation_rate = 0.01  # 0.01
-global_max_mutation_rate = 0.1  # 0.015
+global_max_mutation_rate = 0.08  # 0.015
 global_min_mutation_rate = 0.005  # 0.005
 
 # plot frequency
-global_plot_frequency = 20
+global_plot_frequency = 50
 
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
 # TODO: Diversity Checks
 # TODO: New Spell: Fireball gives a stack of "flaming", each stack increases the damage of the new spell by 15%, stackable for 20 Stacks
 
-
+# TODO: RESET FUNCTION VON CUDA RESETET NICHT DIE COOLDOWNS!!!
 if __name__ == "__main__":
     run_simulation()
 
