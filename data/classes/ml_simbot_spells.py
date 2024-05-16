@@ -1,3 +1,13 @@
+spell_map = {
+    0: 'Fireball',
+    1: 'Frostbolt',
+    2: 'BloodMoonCrescent',
+    3: 'Blaze',
+    4: 'ScorchDot',
+    5: 'Combustion'
+}
+
+
 class Spell:
     def __init__(self, name, cooldown, damage):
         self.name = name
@@ -89,4 +99,3 @@ class Combustion(Spell):
             character.activate_buff(self.name, self.duration, self.damage_increase)
             return True
         return False
-

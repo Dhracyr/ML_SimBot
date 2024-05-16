@@ -40,7 +40,6 @@ class RunSim:
         # Create output for visualisation
         # self.render()
 
-
     def reset(self):
         self.character = Character()
         self.training_dummy = TrainingDummy(self.character)
@@ -49,13 +48,12 @@ class RunSim:
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
         return self.get_results()
 
-
     def render(self):
         """
         print(f"Total Damage: {self.training_dummy.damage_taken} damage")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
         print(f"Remaining DoT Duration: {self.training_dummy.dot_timer}")
-        print(f"Remaining Buff Duration: {self.character.buff_timer}. "
+        print(f"Remaining Buff Duration: {self.character.buff_timer}). "
               f" CD-Buff: {self.spells['Combustion'].current_cooldown}."
               f" CD-Moon: {self.spells['BloodMoonCrescent'].current_cooldown}")
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")

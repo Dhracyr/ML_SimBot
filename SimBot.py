@@ -1,11 +1,7 @@
-import os
+
 import numba
-import numpy as np
 
 from data.classes.ml_simbot_runsim import *
-
-from data.global_variables import *
-
 from matplotlib import pyplot as plt
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
@@ -41,20 +37,14 @@ def initialize_population_kernel(rng_states, action_space_n, sequence_length, cu
 
 
 def evaluate_solution(es_env, solution):
-    spell_map = {
-        0: 'Fireball',
-        1: 'Frostbolt',
-        2: 'BloodMoonCrescent',
-        3: 'Blaze',
-        4: 'ScorchDot',
-        5: 'Combustion'
-    }
     for name_action in solution:
         chosen_spell = spell_map[name_action]
         es_env.step(chosen_spell)
 
     damage_done_with_solution = es_env.training_dummy.damage_taken
     es_env.training_dummy.damage_taken = 0
+    for spell in es_env.spells.values():
+        spell.current_cooldown = 0
 
     return damage_done_with_solution
 
@@ -266,11 +256,11 @@ global_plot_frequency = 50
 # TODO: Diversity Checks
 # TODO: New Spell: Fireball gives a stack of "flaming", each stack increases the damage of the new spell by 15%, stackable for 20 Stacks
 
-# TODO: RESET FUNCTION VON CUDA RESETET NICHT DIE COOLDOWNS!!!
+# TODO: RESET FUNCTION VON CUDA RESET NICHT DIE COOLDOWNS!!! -> Fixed?
 if __name__ == "__main__":
     run_simulation()
 
-# TODO: Parameteroptimierung, da Overfittung bei 95%
+# TODO: Parameteroptimierung, da over_fitting bei 95%
 # TODO: Plotten von Generationen in Farben
 
 # TODO: Parameter durch Cross-Entropy versuchen

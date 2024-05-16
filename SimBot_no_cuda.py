@@ -1,8 +1,6 @@
 import os
-import numpy as np
 
 from data.classes.ml_simbot_runsim import *
-
 from matplotlib import pyplot as plt
 
 from data.methods.adapt_mutation_rate import adapt_mutation_rate
@@ -15,14 +13,6 @@ def initialize_population(pop_size, action_space, sequence_length):
 
 
 def evaluate_solution(es_env, solution):
-    spell_map = {
-        0: 'Fireball',
-        1: 'Frostbolt',
-        2: 'BloodMoonCrescent',
-        3: 'Blaze',
-        4: 'ScorchDot',
-        5: 'Combustion'
-    }
     for name_action in solution:
         chosen_spell = spell_map[name_action]
         es_env.step(chosen_spell)
@@ -64,7 +54,7 @@ def mutate(solution, mutation_rate, action_space):
     return solution
 
 
-def reproduce(ga_env, mutation_rate, new_population, pop_size, population, action_space_n, best_damage,
+def reproduce(ga_env, mutation_rate, new_population, pop_size, population, action_space_n,
               generations_without_improvement, saved_damage_peak):
     while len(new_population) < pop_size:
         # Random of top 10%
@@ -144,8 +134,7 @@ def genetic_algorithm(ga_env, pop_size, generations, sequence_length, mutation_r
             generations_without_improvement, \
             mutation_rate = reproduce(ga_env, mutation_rate,
                                       new_population, pop_size, population,
-                                      action_space_n, max_damage,
-                                      generations_without_improvement,
+                                      action_space_n, generations_without_improvement,
                                       saved_damage_peak)
 
     plt.ioff()
@@ -182,7 +171,7 @@ global_max_mutation_rate = 0.015  # 0.015
 global_min_mutation_rate = 0.005  # 0.005
 
 # plot frequency
-global_plot_frequency = 20
+global_plot_frequency = 10
 
 # TODO: Cross-over-rate?
 # TODO: Reward Function that punishes similarity
@@ -193,7 +182,7 @@ global_plot_frequency = 20
 if __name__ == "__main__":
     run_simulation()
 
-# TODO: Parameteroptimierung, da Overfittung bei 95%
+# TODO: Parameteroptimierung, da over_fitting bei 95%
 # TODO: Plotten von Generationen in Farben
 
 # TODO: Parameter durch Cross-Entropy versuchen

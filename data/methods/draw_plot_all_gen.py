@@ -20,4 +20,5 @@ def draw_plot_all_gen(line, ax, fig, list_best_damage, list_generation, global_g
         ax.figure.canvas.draw()
         ax.figure.canvas.flush_events()
 
+
 list_all_solutions = []
