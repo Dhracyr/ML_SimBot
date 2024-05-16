@@ -40,11 +40,9 @@ def evaluate_solution(es_env, solution):
     for name_action in solution:
         chosen_spell = spell_map[name_action]
         es_env.step(chosen_spell)
-
     damage_done_with_solution = es_env.training_dummy.damage_taken
-    es_env.training_dummy.damage_taken = 0
-    for spell in es_env.spells.values():
-        spell.current_cooldown = 0
+
+    es_env.reset()
 
     return damage_done_with_solution
 
@@ -83,6 +81,7 @@ def mutate_kernel(solution, mutation_rate, action_space_n, rng_states, idx):
     for i in range(len(solution)):
         if xoroshiro128p_uniform_float32(rng_states, idx) < mutation_rate:
             solution[i] = int(xoroshiro128p_uniform_float32(rng_states, idx) * action_space_n)
+            solution[i] %= action_space_n
 
 
 def reproduce(generation, generations_without_improvement,
@@ -239,13 +238,13 @@ def run_simulation():
 
 
 # duration
-global_generations = 200000
+global_generations = 10000
 
 # parameter for cross-entropy
-global_pop_size = 50  # 50
-global_tournament_k_amount = 8  # 10% of pop_size probably
+global_pop_size = 100  # 50
+global_tournament_k_amount = 12  # 10% of pop_size probably
 start_population_mutation_rate = 0.01  # 0.01
-global_max_mutation_rate = 0.08  # 0.015
+global_max_mutation_rate = 0.1  # 0.015
 global_min_mutation_rate = 0.005  # 0.005
 
 # plot frequency

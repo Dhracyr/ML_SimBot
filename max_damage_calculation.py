@@ -216,17 +216,18 @@ class RunSim:
         print(f"- - - - - - - - - - - - - - - - - - - - - - - - - -")
 
     def simulate(self, ticks_amount):
+
         # Simulate a copied_list:
-        copied_list = record16052024  # See file records.py
+        copied_list = record16052024_3  # See file records.py
         better_list = copied_list.replace('[', '').replace(']', '').replace('.', '').split(' ')
         for i in range(ticks_amount):  # Simulate Ticks/Seconds
-            chosen_spell = spell_map[int(better_list[i])]
-            self.step(chosen_spell)
+            # chosen_spell = spell_map[int(better_list[i])]
+            # self.step(chosen_spell)
 
             # Simulator for playing yourself:
-            """
+
             print(f"This is input {i} of {ticks_amount}. Enter a spell")
-            chosen_input = input()
+            chosen_input = int(input())
             if chosen_input in spell_map:
                 chosen_spell = spell_map[chosen_input]
                 self.render()
@@ -234,11 +235,11 @@ class RunSim:
             else:
                 print("Invalid input, please enter a valid spell number.")
                 continue  # Skip to the next iteration if the input is invalid
-            """
+
         print("Total damage taken:", self.training_dummy.damage_taken)
 
 
 if __name__ == "__main__":
     env = RunSim()
     env.simulate(128)
-    # Self simulated max damage = 4242.5 in 128 ticks, e.g. global_max_damage
+    # Self simulated max damage = 4250 in 128 ticks, e.g. global_max_damage
