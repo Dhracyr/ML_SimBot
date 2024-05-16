@@ -1,10 +1,15 @@
 class TrainingDummy:
 
-    def __init__(self, character):
+    def __init__(self):
+        self.debuff_damage_increase = 0.0
+        self.debuff_name = ""
+        self.debuff_timer = 0
+        self.debuff_active = False
+
         self.dot_damage = 0
         self.dot_timer = 0
+
         self.damage_taken = 0
-        self.character = character
 
     def apply_dot(self, dot_damage, duration):
         self.dot_timer = duration
@@ -14,10 +19,15 @@ class TrainingDummy:
         # Check Dot-Timer
         if self.dot_timer > 0:
             self.dot_timer -= 1
-            self.calc_damage(self.dot_damage)
+
+    def activate_debuff(self, name, duration, damage_increase):
+        self.debuff_active = True
+        self.debuff_timer = duration
+        self.debuff_name = name
+        self.debuff_damage_increase = damage_increase
 
     def calc_damage(self, damage):
-        if self.character.buff_active:
-            self.damage_taken += damage * (1 + self.character.buff_damage_increase)
+        if self.debuff_active:
+            self.damage_taken += damage * (1 + self.debuff_damage_increase)
         else:
             self.damage_taken += damage

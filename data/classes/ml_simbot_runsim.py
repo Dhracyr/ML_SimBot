@@ -8,9 +8,10 @@ from data.global_variables import GLOBAL_MAX_TICKS
 
 class RunSim:
     def __init__(self):
-        self.character = Character()
-        self.training_dummy = TrainingDummy(self.character)  # Because the trainingsdummy must know,
-        # List of spells                                            # the buff of the player
+        self.training_dummy = TrainingDummy()
+        self.character = Character(self.training_dummy)
+
+        # List of spells
         self.spells = {
 
             'Fireball': Fireball('Fireball', 0, 10),  # Name, Cooldown, Damage
@@ -30,8 +31,8 @@ class RunSim:
             self.spell_cast_count[action_name] += 1
 
         # Check Dot-Spell/Buff Tick
-        self.training_dummy.tick()
         self.character.tick()
+        self.training_dummy.tick()
 
         # Check Cooldown Tick
         for spell in self.spells.values():
@@ -41,12 +42,12 @@ class RunSim:
         # self.render()
 
     def reset(self):
-        self.character = Character()
-        self.training_dummy = TrainingDummy(self.character)
+        self.training_dummy = TrainingDummy()
+        self.character = Character(self.training_dummy)
         for spell in self.spells.values():
             spell.current_cooldown = 0
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
-        return self.get_results()
+        # return self.get_results()
 
     def render(self):
         """
@@ -65,10 +66,11 @@ class RunSim:
 
     def get_action_space_n(self):
         return len(self.spells)
-
+    """
     def get_results(self):
         cooldowns = [spell.current_cooldown / 60 for _, spell in self.spells.items()]
         cast_counts = [self.spell_cast_count[name] / GLOBAL_MAX_TICKS for name in self.spells.keys()]
         last_spell = [1] if self.character.last_spell == 'Blaze' else [0]
         state = [self.training_dummy.damage_taken] + cooldowns + cast_counts + last_spell
         return np.array(state, dtype=np.float32)
+    """

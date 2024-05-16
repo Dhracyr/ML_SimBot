@@ -32,8 +32,7 @@ class Fireball(Spell):
 
     def cast(self, run_sim):
         if super().cast(run_sim):
-            training_dummy = run_sim.training_dummy
-            training_dummy.calc_damage(self.damage)
+            run_sim.character.deal_damage(self.damage)
             return True
         return False
 
@@ -41,8 +40,7 @@ class Fireball(Spell):
 class Frostbolt(Spell):
     def cast(self, run_sim):
         if super().cast(run_sim):
-            training_dummy = run_sim.training_dummy
-            training_dummy.calc_damage(self.damage)
+            run_sim.character.deal_damage(self.damage)
             return True
         return False
 
@@ -51,8 +49,7 @@ class BloodMoonCrescent(Spell):
 
     def cast(self, run_sim):
         if super().cast(run_sim):
-            training_dummy = run_sim.training_dummy
-            training_dummy.calc_damage(self.damage)
+            run_sim.character.deal_damage(self.damage)
             return True
         return False
 
@@ -61,13 +58,12 @@ class Blaze(Spell):
     def cast(self, run_sim):
         if super().cast(run_sim):
             character = run_sim.character
-            training_dummy = run_sim.training_dummy
             if character.last_spell == "Fireball":
                 applied_damage = self.damage * 5
-                training_dummy.calc_damage(applied_damage)
+                run_sim.character.deal_damage(applied_damage)
                 # print(f"Blaze cast after Fireball, damage applied: {applied_damage}")
             else:
-                training_dummy.calc_damage(self.damage)
+                run_sim.character.deal_damage(self.damage)
                 # print(f"Blaze cast without Fireball, damage applied: {self.damage}")
             return True
         return False
@@ -80,8 +76,7 @@ class ScorchDot(Spell):
 
     def cast(self, run_sim):
         if super().cast(run_sim):
-            training_dummy = run_sim.training_dummy
-            training_dummy.apply_dot(self.damage, self.duration)
+            run_sim.character.inflict_dot(self.damage, self.duration)
             return True
         return False
 
@@ -94,8 +89,6 @@ class Combustion(Spell):
 
     def cast(self, run_sim):
         if super().cast(run_sim):
-            # training_dummy = run_sim.training_dummy
-            character = run_sim.character
-            character.activate_buff(self.name, self.duration, self.damage_increase)
+            run_sim.character.activate_buff(self.name, self.duration, self.damage_increase)
             return True
         return False
