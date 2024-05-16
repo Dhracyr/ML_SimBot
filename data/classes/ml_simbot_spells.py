@@ -4,7 +4,8 @@ spell_map = {
     2: 'BloodMoonCrescent',
     3: 'Blaze',
     4: 'ScorchDot',
-    5: 'Combustion'
+    5: 'Combustion',
+    6: 'LivingFlame'
 }
 
 
@@ -29,10 +30,20 @@ class Spell:
 
 
 class Fireball(Spell):
+    def __init__(self, name, cooldown, duration, damage, stacks):
+        super().__init__(name, cooldown, damage)
+        self.stacks = stacks
+        self.duration = duration
 
     def cast(self, run_sim):
         if super().cast(run_sim):
             run_sim.character.deal_damage(self.damage)
+            if run_sim.character.is_buff_active("LivingFlame"):
+                run_sim.character.activate_buff(self.name, self.duration, self.damage, self.stacks)
+            else:
+                run_sim.character.increment_buff_stacks("LivingFlame", 1)
+                run_sim.character.reset_buff_to_duration("LivingFlame", self.duration)
+
             return True
         return False
 
@@ -82,8 +93,8 @@ class ScorchDot(Spell):
 
 
 class Combustion(Spell):
-    def __init__(self, name, cooldown, duration, damage_increase):
-        super().__init__(name, cooldown, duration)
+    def __init__(self, name, cooldown, duration, damage, damage_increase):
+        super().__init__(name, cooldown, damage)
         self.duration = duration
         self.damage_increase = damage_increase
 
@@ -92,3 +103,20 @@ class Combustion(Spell):
             run_sim.character.activate_buff(self.name, self.duration, self.damage_increase)
             return True
         return False
+
+
+class LivingFlame(Spell):
+    def __init__(self, name, cooldown, duration, damage):
+        super().__init__(name, cooldown, damage)
+        self.duration = duration
+
+    def cast(self, run_sim):
+        if super().cast(run_sim):
+            if run_sim.character.is_buff_active("LivingFlame"):
+                live_stacks = run_sim.character.increment_buff_stacks("LivingFlame", 0)
+                applied_damage = self.damage + 10 * live_stacks
+                run_sim.character.deal_damage(applied_damage)
+                print("LivingFlame was casted with", live_stacks, "stacks!")
+            else:
+                run_sim.character.deal_damage(self.damage)
+                print("LivingFlame was casted without stacks :(")
