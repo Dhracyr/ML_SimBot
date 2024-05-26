@@ -40,8 +40,8 @@ def evaluate_solution(es_env, solution):
     for name_action in solution:
         chosen_spell = spell_map[name_action]
         es_env.step(chosen_spell)
-    damage_done_with_solution = es_env.training_dummy.damage_taken
 
+    damage_done_with_solution = es_env.training_dummy.damage_taken
     es_env.reset()
 
     return damage_done_with_solution

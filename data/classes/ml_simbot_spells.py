@@ -93,14 +93,15 @@ class ScorchDot(Spell):
 
 
 class Combustion(Spell):
-    def __init__(self, name, cooldown, duration, damage, damage_increase):
+    def __init__(self, name, cooldown, duration, damage, damage_increase, stacks):
         super().__init__(name, cooldown, damage)
         self.duration = duration
         self.damage_increase = damage_increase
+        self.stacks = stacks
 
     def cast(self, run_sim):
         if super().cast(run_sim):
-            run_sim.character.activate_buff(self.name, self.duration, self.damage_increase)
+            run_sim.character.activate_buff(self.name, self.duration, self.damage_increase, self.stacks)
             return True
         return False
 
@@ -119,4 +120,3 @@ class LivingFlame(Spell):
                 print("LivingFlame was casted with", live_stacks, "stacks!")
             else:
                 run_sim.character.deal_damage(self.damage)
-                print("LivingFlame was casted without stacks :(")

@@ -14,13 +14,13 @@ class RunSim:
         # List of spells
         self.spells = {
 
-            'Fireball': Fireball('Fireball', 0, 5, 10),  # Name, Cooldown, Duration, Damage
+            'Fireball': Fireball('Fireball', 0, 5, 10, 1),  # Name, Cooldown, Duration, Damage
             'Frostbolt': Frostbolt('Frostbolt', 0, 3),  # Name, Cooldown, Damage
             'BloodMoonCrescent': BloodMoonCrescent('BloodMoonCrescent', 10, 80),  # Name, Cooldown, Damage
             'Blaze': Blaze('Blaze', 0, 5),  # Name, Cooldown, Damage
             'ScorchDot': ScorchDot('ScorchDot', 0, 20, 5),  # Name, Cooldown, Duration, Damage
-            'Combustion': Combustion('Combustion', 60, 25, 0, 0.5),  # Name, Cooldown, Duration, Damage, Damage_increase
-            'LivingFlame': LivingFlame('LivingFlame', 0, 5, 5)  # Name, Cooldown, Duration, Damage
+            'Combustion': Combustion('Combustion', 60, 25, 0, 0.5, 1),  # Name, Cooldown, Duration, Damage, Damage_increase
+            'LivingFlame': LivingFlame('LivingFlame', 0, 5, 50)  # Name, Cooldown, Duration, Damage
         }
         self.spell_cast_count = {name: 0 for name in self.spells.keys()}
 
@@ -30,6 +30,8 @@ class RunSim:
         if spell.cast(self):
             self.character.last_spell = spell.name
             self.spell_cast_count[action_name] += 1
+            if action_name == "LivingFlame":
+                print("Here!")
 
         # Check Dot-Spell/Buff Tick
         self.character.tick()
